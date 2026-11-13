@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "ErrorCode": {
+      "description": "오류 종류. HTTP 상태 코드와 1:1로 대응한다. 스프링부트는 이 값으로 분기하면 된다.",
+      "enum": [
+        "INVALID_JSON",
+        "INVALID_REQUEST",
+        "NOT_FOUND",
+        "METHOD_NOT_ALLOWED",
+        "INTERNAL_ERROR"
+      ],
+      "title": "ErrorCode",
+      "type": "string"
+    },
+    "ErrorDetail": {
+      "description": "어느 값이 왜 틀렸는지 하나.",
+      "properties": {
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "틀린 값의 위치 (예: 'cells[0].strokes[1].points'). 요청 전체 규칙이면 null",
+          "title": "Field"
+        },
+        "message": {
+          "description": "이유 (예: '정답 문장에는 한글, 띄어쓰기, 문장부호 ? ! . , 만 쓸 수 있어요')",
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "title": "ErrorDetail",
+      "type": "object"
+    }
+  },
+  "description": "오류 응답. 성공(200)이 아니면 항상 이 모양이다.",
+  "properties": {
+    "code": {
+      "$ref": "#/$defs/ErrorCode"
+    },
+    "message": {
+      "description": "사람이 읽을 요약 한 줄",
+      "title": "Message",
+      "type": "string"
+    },
+    "details": {
+      "description": "INVALID_REQUEST일 때 틀린 값 목록",
+      "items": {
+        "$ref": "#/$defs/ErrorDetail"
+      },
+      "title": "Details",
+      "type": "array"
+    },
+    "engineVersion": {
+      "title": "Engineversion",
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "message",
+    "engineVersion"
+  ],
+  "title": "ErrorResponse",
+  "type": "object"
+}
