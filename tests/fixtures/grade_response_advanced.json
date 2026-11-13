@@ -1,0 +1,402 @@
+{
+  "sessionId": "figma-advanced",
+  "engineVersion": "0.1.0",
+  "stage": "advanced",
+  "correct": false,
+  "perfect": false,
+  "cells": [
+    {
+      "index": 0,
+      "expected": "나",
+      "recognized": "나",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㄴ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 1,
+      "expected": "너",
+      "recognized": "너",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㄴ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅓ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅓ",
+          "role": "jung",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 2,
+      "expected": " ",
+      "recognized": " ",
+      "confidence": null,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": null,
+      "strokeMap": null,
+      "durationMs": null
+    },
+    {
+      "index": 3,
+      "expected": "좋",
+      "recognized": "좋",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㅈ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅈ",
+          "role": "cho",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅗ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 3,
+          "jamo": "ㅗ",
+          "role": "jung",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 4,
+          "jamo": "ㅎ",
+          "role": "jong",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 5,
+          "jamo": "ㅎ",
+          "role": "jong",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 4,
+      "expected": "아",
+      "recognized": "아",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㅇ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 5,
+      "expected": "하",
+      "recognized": "하",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㅎ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅎ",
+          "role": "cho",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅎ",
+          "role": "cho",
+          "strokeNo": 3
+        },
+        {
+          "userIndex": 3,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 4,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 6,
+      "expected": "냐",
+      "recognized": "냐",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㄴ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅑ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅑ",
+          "role": "jung",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 3,
+          "jamo": "ㅑ",
+          "role": "jung",
+          "strokeNo": 3
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 7,
+      "expected": "?",
+      "recognized": "?",
+      "confidence": 0.97,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": null,
+      "strokeMap": null,
+      "durationMs": 500
+    },
+    {
+      "index": 8,
+      "expected": null,
+      "recognized": " ",
+      "confidence": null,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": null,
+      "strokeMap": null,
+      "durationMs": null
+    },
+    {
+      "index": 9,
+      "expected": null,
+      "recognized": " ",
+      "confidence": null,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": null,
+      "strokeMap": null,
+      "durationMs": null
+    },
+    {
+      "index": 10,
+      "expected": null,
+      "recognized": " ",
+      "confidence": null,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": null,
+      "strokeMap": null,
+      "durationMs": null
+    }
+  ],
+  "alignment": [
+    {
+      "targetIndex": 0,
+      "targetChar": "나",
+      "cellIndex": 0,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 1,
+      "targetChar": " ",
+      "cellIndex": null,
+      "mark": "spacing",
+      "error": "MISSING_SPACE"
+    },
+    {
+      "targetIndex": 2,
+      "targetChar": "너",
+      "cellIndex": 1,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 3,
+      "targetChar": " ",
+      "cellIndex": 2,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 4,
+      "targetChar": "좋",
+      "cellIndex": 3,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 5,
+      "targetChar": "아",
+      "cellIndex": 4,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 6,
+      "targetChar": "하",
+      "cellIndex": 5,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 7,
+      "targetChar": "냐",
+      "cellIndex": 6,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 8,
+      "targetChar": "?",
+      "cellIndex": 7,
+      "mark": "none",
+      "error": null
+    }
+  ],
+  "words": [
+    {
+      "text": "나",
+      "cellIndexes": [
+        0
+      ],
+      "correct": false
+    },
+    {
+      "text": "너",
+      "cellIndexes": [
+        1
+      ],
+      "correct": false
+    },
+    {
+      "text": "좋아하냐?",
+      "cellIndexes": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "correct": true
+    }
+  ],
+  "explanations": [
+    {
+      "kind": "spacing",
+      "cellIndexes": [
+        0,
+        1
+      ],
+      "wrong": "나너",
+      "right": "나 너",
+      "jamo": null,
+      "text": "나너는 나 너로 띄어 써요."
+    }
+  ],
+  "sejong": {
+    "text": "아쉬워요, 한 곳이 달라요",
+    "subText": "어디가 다른지 스스로 찾아볼까요?",
+    "expression": "regret",
+    "source": "template"
+  }
+}
