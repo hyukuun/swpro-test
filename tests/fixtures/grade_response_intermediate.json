@@ -1,0 +1,244 @@
+{
+  "sessionId": "figma-intermediate",
+  "engineVersion": "0.1.0",
+  "stage": "intermediate",
+  "correct": false,
+  "perfect": false,
+  "cells": [
+    {
+      "index": 0,
+      "expected": "보",
+      "recognized": "보",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 3
+        },
+        {
+          "userIndex": 3,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 4
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 1,
+      "expected": "고",
+      "recognized": "고",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㄱ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅗ",
+          "role": "jung",
+          "strokeNo": 1
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 2,
+      "expected": "싶",
+      "recognized": "십",
+      "confidence": 0.88,
+      "charCorrect": false,
+      "mark": "char",
+      "errors": [
+        {
+          "type": "CHAR_MISMATCH"
+        }
+      ],
+      "strokePass": null,
+      "strokeMap": null,
+      "durationMs": 1100
+    },
+    {
+      "index": 3,
+      "expected": "었",
+      "recognized": "었",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㅇ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅓ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅓ",
+          "role": "jung",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 3,
+          "jamo": "ㅆ",
+          "role": "jong",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 4,
+          "jamo": "ㅆ",
+          "role": "jong",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 4,
+      "expected": "어",
+      "recognized": "어",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㅇ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅓ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅓ",
+          "role": "jung",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    }
+  ],
+  "alignment": [
+    {
+      "targetIndex": 0,
+      "targetChar": "보",
+      "cellIndex": 0,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 1,
+      "targetChar": "고",
+      "cellIndex": 1,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 2,
+      "targetChar": " ",
+      "cellIndex": null,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 3,
+      "targetChar": "싶",
+      "cellIndex": 2,
+      "mark": "char",
+      "error": "CHAR_MISMATCH"
+    },
+    {
+      "targetIndex": 4,
+      "targetChar": "었",
+      "cellIndex": 3,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 5,
+      "targetChar": "어",
+      "cellIndex": 4,
+      "mark": "none",
+      "error": null
+    }
+  ],
+  "words": [
+    {
+      "text": "보고",
+      "cellIndexes": [
+        0,
+        1
+      ],
+      "correct": true
+    },
+    {
+      "text": "싶었어",
+      "cellIndexes": [
+        2,
+        3,
+        4
+      ],
+      "correct": false
+    }
+  ],
+  "explanations": [
+    {
+      "kind": "char",
+      "cellIndexes": [
+        2,
+        3,
+        4
+      ],
+      "wrong": "십었어",
+      "right": "싶었어",
+      "jamo": null,
+      "text": "십었어라고 쓰셨는데 싶었어라고 써야 해요."
+    }
+  ],
+  "sejong": {
+    "text": "아쉬워요, 한 어절이 달라요",
+    "subText": "빨간 상자 안에서 어느 글자가 다른지 찾아볼까요?",
+    "expression": "regret",
+    "source": "template"
+  }
+}
