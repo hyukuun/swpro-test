@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "Canvas": {
+      "additionalProperties": false,
+      "description": "원고지 칸 하나의 크기(px). 모든 칸이 같은 크기라고 본다.\n\n엔진은 x / w, y / h로 좌표를 0~1로 바꿔 정답 획 데이터(0~1)와 비교한다.\n칸 전체 = 정답 글자 프레임(0~1). 가이드 글자도 칸 전체에 맞춰 그린다.",
+      "properties": {
+        "w": {
+          "description": "칸 너비(px)",
+          "exclusiveMinimum": 0,
+          "title": "W",
+          "type": "number"
+        },
+        "h": {
+          "description": "칸 높이(px)",
+          "exclusiveMinimum": 0,
+          "title": "H",
+          "type": "number"
+        }
+      },
+      "required": [
+        "w",
+        "h"
+      ],
+      "title": "Canvas",
+      "type": "object"
+    },
+    "Cell": {
+      "additionalProperties": false,
+      "description": "원고지 칸 하나. 획이 없으면 빈 칸(= 띄어쓰기).\n\n프론트가 지키는 규칙:\n- 획은 펜을 댄 칸에 속한다. 칸 경계를 넘어가도 시작한 칸에 넣는다.\n- 좌표는 그 칸의 왼쪽 위 기준 픽셀 (Point 설명 참고).\n- strokes는 학습자가 쓴 순서대로 담는다. 획순(ORDER) 판정이 이 순서를 그대로 쓴다.\n- '한 획 지우기'·'칸 지우기'로 지운 획은 빼고, 제출 시점에 남아 있는 획만 보낸다.\n- 고수: 마지막으로 글자를 쓴 칸 뒤의 빈 칸은 엔진이 무시한다 (띄어쓰기 오류로 보지 않음).\n- 초보·중수: 칸 수가 정답 글자 수(공백 제외)와 같아야 한다 (Stage 설명 참고).",
+      "properties": {
+        "index": {
+          "description": "0부터 시작하는 칸 번호 (왼쪽→오른쪽, 위→아래)",
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "strokes": {
+          "description": "쓴 순서대로. 빈 칸이면 []",
+          "items": {
+            "$ref": "#/$defs/Stroke"
+          },
+          "title": "Strokes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "Cell",
+      "type": "object"
+    },
+    "Locale": {
+      "enum": [
+        "ko",
+        "en"
+      ],
+      "title": "Locale",
+      "type": "string"
+    },
+    "Stage": {
+      "description": "학습 단계 (피그마 '따라 쓰기' 화면 기준).\n\n| 단계 | 칸                                   | 가이드 글자 | 띄어쓰기 판정 |\n|------|--------------------------------------|-------------|---------------|\n| 초보 | 정답 글자 수만큼 (단어 하나 또는 자모 하나) | 회색 있음   | 없음          |\n| 중수 | 어절마다 묶인 칸, 정답 글자 수만큼     | 없음        | 없음 (묶음 사이가 띄어쓰기) |\n| 고수 | 넉넉한 칸, 빈 칸 = 띄어쓰기            | 없음        | 있음          |\n\n초보·중수: cells 수 = 정답에서 공백을 뺀 글자 수, 칸 i ↔ 공백 뺀 정답의 i번째 글자.",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ],
+      "title": "Stage",
+      "type": "string"
+    },
+    "Stroke": {
+      "additionalProperties": false,
+      "description": "획 하나 = 펜을 대고 뗄 때까지 찍힌 점들. 점은 찍힌 순서대로.",
+      "properties": {
+        "points": {
+          "description": "[x, y, t, p] 배열의 목록",
+          "items": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 1,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "Stroke",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "판정 요청 (제출할 때 한 번). 단어 하나만 쓰는 초보도 같은 형식.\n\n검사 규칙 (어기면 422, 기준 숫자는 파일 맨 위 MAX_* 상수):\n- target: 한글 음절·자모·띄어쓰기·? ! . , 만, 1~20칸, 앞뒤 공백·연속 공백 없음\n    초보: 띄어쓰기 없음 (단어 하나 또는 자모 하나). 자모는 초보에서 한 글자만\n    중수: 어절 3개 이하\n- cells: index가 0부터 빠짐없이 순서대로, 최대 30칸\n    초보·중수: 칸 수 = 정답 글자 수(공백 제외)\n    고수: 칸 수 ≥ 정답 칸 수(띄어쓰기 포함)\n- 획이 하나도 없는 제출도 받는다 (판정 결과: 모든 칸 틀림)",
+  "properties": {
+    "sessionId": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "스프링부트 쪽 쓰기 세션 ID (로그용)",
+      "title": "Sessionid"
+    },
+    "stage": {
+      "$ref": "#/$defs/Stage"
+    },
+    "target": {
+      "description": "정답 문장. 이 단계에서 써야 하는 텍스트 (예: '나 너 좋아하냐?')",
+      "title": "Target",
+      "type": "string"
+    },
+    "locale": {
+      "$ref": "#/$defs/Locale",
+      "default": "ko"
+    },
+    "canvas": {
+      "$ref": "#/$defs/Canvas",
+      "description": "칸 하나의 크기(px)"
+    },
+    "cells": {
+      "items": {
+        "$ref": "#/$defs/Cell"
+      },
+      "maxItems": 30,
+      "minItems": 1,
+      "title": "Cells",
+      "type": "array"
+    }
+  },
+  "required": [
+    "stage",
+    "target",
+    "canvas",
+    "cells"
+  ],
+  "title": "GradeRequest",
+  "type": "object"
+}
