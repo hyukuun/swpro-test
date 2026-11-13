@@ -1,0 +1,20 @@
+{
+  "description": "엔진이 살아 있는지. 스프링부트는 engineVersion이 '-stub'으로 끝나면 임시 응답 중임을 알 수 있다.",
+  "properties": {
+    "status": {
+      "const": "ok",
+      "default": "ok",
+      "title": "Status",
+      "type": "string"
+    },
+    "engineVersion": {
+      "title": "Engineversion",
+      "type": "string"
+    }
+  },
+  "required": [
+    "engineVersion"
+  ],
+  "title": "HealthResponse",
+  "type": "object"
+}
