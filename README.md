@@ -10,21 +10,21 @@ FE (iPad Safari) → Spring Boot → 교정엔진 (FastAPI)
 
 ```
 app/
-├── main.py                    # [혁윤] FastAPI 엔드포인트 (스프링부트와 통신)
+├── main.py                    # FastAPI 엔드포인트 (스프링부트와 통신)
 ├── config.py                  # 환경변수 설정
-├── errors.py                  # [혁윤] 오류 응답 (400·422·404·405·500을 한 가지 모양으로)
-├── schemas.py                 # [혁윤] (최우선) D-09 요청/응답 모델
-├── pipeline.py                # [혁윤] 인식 → 정렬 → 획순 → 결과 종합 흐름
+├── errors.py                  # 오류 응답 (400·422·404·405·500을 한 가지 모양으로)
+├── schemas.py                 # 요청/응답 모델
+├── pipeline.py                # 인식 → 정렬 → 획순 → 결과 종합 흐름
 ├── core/
-│   ├── hangul.py              # [혁윤] 음절 분해/조합, 겹받침, 음절 구조 유형 (D-05)
-│   └── reference.py           # [정진] D-08 정답 획 데이터 읽기 (compose() 결과)
+│   ├── hangul.py              # 음절 분해/조합, 겹받침, 음절 구조 유형 (D-05)
+│   └── reference.py           # 정답 획 데이터 읽기 (compose() 결과)
 ├── services/
-│   ├── recognizer.py          # [혁윤] D-01 칸별 글자 인식
-│   ├── stroke_checker.py      # [정진] D-04 획 수·획순·방향
-│   ├── spacing_align.py       # [혁윤] D-02 문장 정렬, 띄어쓰기
-│   ├── aggregate.py           # [혁윤] D-03 단계별 결과 묶기
-│   ├── feedback_templates.py  # [혁윤] E-03·E-06 설명 문장, 킹세종 템플릿
-    └── llm_feedback.py        # [혁윤] E-07 킹세종 LLM 한마디
+│   ├── recognizer.py          # 칸별 글자 인식
+│   ├── stroke_checker.py      # 획 수·획순·방향
+│   ├── spacing_align.py       # 문장 정렬, 띄어쓰기
+│   ├── aggregate.py           # 단계별 결과 묶기
+│   ├── feedback_templates.py  # 설명 문장, 킹세종 템플릿
+    └── llm_feedback.py        # 킹세종 LLM 한마디
 tests/
 ```
 
