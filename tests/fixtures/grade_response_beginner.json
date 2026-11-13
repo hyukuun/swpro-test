@@ -1,0 +1,148 @@
+{
+  "sessionId": "figma-beginner",
+  "engineVersion": "0.1.0",
+  "stage": "beginner",
+  "correct": true,
+  "perfect": false,
+  "cells": [
+    {
+      "index": 0,
+      "expected": "바",
+      "recognized": "바",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "none",
+      "errors": [],
+      "strokePass": true,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 3
+        },
+        {
+          "userIndex": 3,
+          "jamo": "ㅂ",
+          "role": "cho",
+          "strokeNo": 4
+        },
+        {
+          "userIndex": 4,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 5,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    },
+    {
+      "index": 1,
+      "expected": "다",
+      "recognized": "다",
+      "confidence": 0.95,
+      "charCorrect": true,
+      "mark": "stroke",
+      "errors": [
+        {
+          "type": "ORDER",
+          "jamo": "ㄷ",
+          "role": "cho",
+          "strokeIndex": 1,
+          "expected": 1,
+          "actual": 2
+        }
+      ],
+      "strokePass": false,
+      "strokeMap": [
+        {
+          "userIndex": 0,
+          "jamo": "ㄷ",
+          "role": "cho",
+          "strokeNo": 2
+        },
+        {
+          "userIndex": 1,
+          "jamo": "ㄷ",
+          "role": "cho",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 2,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 1
+        },
+        {
+          "userIndex": 3,
+          "jamo": "ㅏ",
+          "role": "jung",
+          "strokeNo": 2
+        }
+      ],
+      "durationMs": 900
+    }
+  ],
+  "alignment": [
+    {
+      "targetIndex": 0,
+      "targetChar": "바",
+      "cellIndex": 0,
+      "mark": "none",
+      "error": null
+    },
+    {
+      "targetIndex": 1,
+      "targetChar": "다",
+      "cellIndex": 1,
+      "mark": "stroke",
+      "error": null
+    }
+  ],
+  "words": [
+    {
+      "text": "바다",
+      "cellIndexes": [
+        0,
+        1
+      ],
+      "correct": true
+    }
+  ],
+  "explanations": [
+    {
+      "kind": "stroke",
+      "cellIndexes": [
+        1
+      ],
+      "wrong": null,
+      "right": "다",
+      "jamo": "ㄷ",
+      "text": "다의 ㄷ은 위 가로획을 먼저 쓰고, 세로에서 아래로 이어 써요."
+    }
+  ],
+  "sejong": {
+    "text": "글자는 다 맞았어요. ‘다’ 쓰는 순서가 달라요",
+    "subText": "주황 상자가 순서가 다른 글자예요. 정답 보기에서 바른 순서를 볼 수 있어요.",
+    "expression": "praise",
+    "source": "template"
+  }
+}
