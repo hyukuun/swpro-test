@@ -1,0 +1,12 @@
+# ruff: 파이썬 린트(코드 검사) + 포맷(자동 정렬)
+#   검사:  ruff check .        자동 수정: ruff check . --fix
+#   포맷:  ruff format .       포맷 검사: ruff format --check .
+line-length = 120
+target-version = "py312"
+
+[lint]
+# E·W: 기본 스타일, F: 안 쓰는 import·변수 등 실수, I: import 정렬,
+# UP: 최신 파이썬 문법, B: 버그가 생기기 쉬운 코드
+select = ["E", "W", "F", "I", "UP", "B"]
+# UP042: str + Enum 대신 StrEnum을 쓰라는 규칙. 동작이 미묘하게 달라질 수 있어 끈다
+ignore = ["UP042"]
