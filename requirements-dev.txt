@@ -1,0 +1,6 @@
+# 개발·테스트·CI용 (서버 실행에는 requirements.txt만 필요)
+-r requirements.txt
+pytest==9.2.0
+httpx==0.28.1
+ruff==0.17.5
+mypy==2.4.1
