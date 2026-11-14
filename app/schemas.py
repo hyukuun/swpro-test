@@ -280,12 +280,20 @@ class CellError(CamelModel):
     - MISSING    : jamo, role, strokeNo        (strokeIndex 없음)
     - EXTRA      : strokeIndex                 (jamo, role 없음)
     - BALANCE    : metric, value, range, message (+ exceed 또는 dx·dy). 글자 전체 항목은 jamo, role 없음
-    - 글자 오류(CHAR_MISMATCH 등): type만
-    서버 숙련도 집계 기준 = type + jamo + role
+    - CHAR_MISMATCH: jamo, role. 정답과 다른 자리(초성·중성·종성)마다 하나씩
+        jamo = 그 자리의 정답 자모 (예: 싶→십이면 {role: jong, jamo: 'ㅍ'})
+        정답에 받침이 없는데 받침을 쓰면 {role: jong, jamo: null}
+        겹모음(ㅘ)·겹받침(ㄺ)은 한 덩어리로 본다
+        빈 칸·알아볼 수 없는 글자·자모 단독·문장부호는 나눌 수 없어 하나만 (jamo, role 없음)
+    - EXTRA_CHAR : type만
+    서버 숙련도 집계 기준 = type + jamo + role (글자 오류도 자모별로 센다)
     """
 
     type: ErrorType
-    jamo: str | None = Field(default=None, description="오류가 난 자모 (예: 'ㄱ'). EXTRA·글자 전체 BALANCE는 null")
+    jamo: str | None = Field(
+        default=None,
+        description="오류가 난 자모 (예: 'ㄱ'). CHAR_MISMATCH는 정답 자모. EXTRA·EXTRA_CHAR·글자 전체 BALANCE는 null",
+    )
     role: Role | None = Field(default=None, description="자모의 자리 cho | jung | jong")
     stroke_index: int | None = Field(
         default=None, ge=0, description="학습자가 쓴 획 순번, 0부터. 프론트가 이 획을 빨갛게 표시"

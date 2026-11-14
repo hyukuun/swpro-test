@@ -110,7 +110,7 @@ tests/
 | `cells[]` | 칸마다의 결과 (요청 칸과 같은 순서) | 초보 결과 화면 |
 | `cells[].expected` / `recognized` | 이 칸의 정답 글자 / 학습자가 쓴 글자 | '이렇게 쓰셨어요' |
 | `cells[].mark` | 칸 표시: `none` 맞음, `char` 빨강(글자), `spacing` 빨강(띄어쓰기), `stroke` 주황(획순) | 상자 색 |
-| `cells[].errors[]` | 획순·글자 오류 상세 (`ORDER`, `DIRECTION`, `CHAR_MISMATCH` …) | 숙련도 집계, 획 빨갛게 표시 |
+| `cells[].errors[]` | 획순·글자 오류 상세 (`ORDER`, `DIRECTION`, `CHAR_MISMATCH` …). 글자 오류도 틀린 자리마다 `role`·`jamo` (예: 싶→십 = 받침 `ㅍ`) | 숙련도 집계, 획 빨갛게 표시 |
 | `cells[].strokeMap[]` | 학습자 획 ↔ 정답 획 짝 | 나란히 리플레이 |
 | `alignment[]` | 내가 쓴 줄 ↔ 정답 줄을 칸끼리 맞춘 것 | '정답 비교' 화면 |
 | `words[]` | 어절별 맞음/틀림 | 중수 결과(어절 빨간 상자) |

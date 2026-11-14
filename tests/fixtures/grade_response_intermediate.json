@@ -76,7 +76,9 @@
       "mark": "char",
       "errors": [
         {
-          "type": "CHAR_MISMATCH"
+          "type": "CHAR_MISMATCH",
+          "jamo": "ㅍ",
+          "role": "jong"
         }
       ],
       "strokePass": null,
