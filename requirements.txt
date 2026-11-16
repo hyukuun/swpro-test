@@ -2,7 +2,7 @@ fastapi==0.162.3
 uvicorn[standard]==0.54.0
 pydantic==2.14.3
 
-# 획순 판정 (app/core/correction_engine/)
+# 획순 판정 (app/services/stroke_checker.py, stroke_balance.py)
 numpy==2.5.5
 scipy==1.18.1
 
