@@ -1,3 +1,12 @@
 fastapi==0.162.3
 uvicorn[standard]==0.54.0
 pydantic==2.14.3
+
+# 획순 판정 (app/core/correction_engine/)
+numpy==2.5.5
+scipy==1.18.1
+
+# 정답 획 데이터 만들기·검수 (app/core/stroke_vectorizer/, scripts/)
+fonttools==4.68.0
+scikit-image==0.26.0
+matplotlib==3.11.2
