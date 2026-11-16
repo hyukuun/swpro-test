@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>획 조정 편집기</title>
+<style>
+  @font-face { font-family: "TargetFont"; src: url("/font"); }
+  :root { --bg:#fafafa; --panel:#fff; --line:#ddd; --text:#222; --muted:#888; --accent:#2563eb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, "Noto Sans KR", sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:10px 16px;
+           background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:2; }
+  header h1 { font-size:16px; margin:0 8px 0 0; }
+  header .grp { display:flex; gap:6px; align-items:center; padding:0 10px; border-left:1px solid var(--line); }
+  input[type=text] { font-size:20px; width:5.5em; padding:2px 6px; }
+  button { font-size:14px; padding:5px 10px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:default; }
+  label { font-size:14px; }
+  main { display:grid; grid-template-columns: minmax(360px, 640px) 1fr; gap:16px; padding:16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  #canvas { width:100%; aspect-ratio:1; display:block; touch-action:none; user-select:none; }
+  .info { font-size:13px; color:var(--muted); margin-top:8px; line-height:1.6; }
+  .info b { color:var(--text); }
+  #strokeList { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0; }
+  #strokeList button { padding:3px 8px; font-size:13px; }
+  #strokeList button.sel { outline:2px solid var(--accent); }
+  #strokeList button.tw::after { content:" ✎"; }
+  #previews { display:grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap:8px; }
+  #previews .pv { border:1px solid var(--line); border-radius:8px; cursor:pointer; background:#fff; }
+  #previews .pv svg { width:100%; aspect-ratio:1; display:block; }
+  #previews .pv div { text-align:center; font-size:13px; padding-bottom:3px; }
+  h2 { font-size:14px; margin:0 0 8px; }
+  #tweakList { font-size:13px; line-height:1.8; }
+  #tweakList span { cursor:pointer; color:var(--accent); margin-right:8px; }
+  .dirty { color:#d97706; font-weight:600; }
+  kbd { border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:12px; background:#f4f4f4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>획 조정 편집기 <span id="fontName" style="color:var(--muted);font-weight:400"></span></h1>
+  <input id="charInput" type="text" value="뒁" title="글자 입력 후 Enter">
+  <button id="loadBtn">불러오기</button>
+  <div class="grp">
+    <span style="font-size:14px">저장 범위</span>
+    <label><input type="radio" name="scope" value="syl" checked> 이 글자만</label>
+    <label><input type="radio" name="scope" value="slot"> 같은 자리 전체</label>
+  </div>
+  <div class="grp">
+    <label>끌기 영향 <input id="radius" type="range" min="0" max="16" step="0.5" value="3"> <span id="radiusVal">3</span>점</label>
+    <label><input id="whole" type="checkbox"> 획 전체 이동</label>
+  </div>
+  <div class="grp">
+    <button id="undoBtn" title="Ctrl+Z">되돌리기</button>
+    <button id="clearBtn" title="선택한 획의 현재 범위 조정을 0으로">이 획 조정 지우기</button>
+    <button id="saveBtn" class="primary" title="Ctrl+S">저장</button>
+    <span id="status"></span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <svg id="canvas" viewBox="-40 -40 1080 1080"></svg>
+    <div id="strokeList"></div>
+    <div class="info" id="selInfo"></div>
+    <div class="info">
+      획 번호를 눌러 고르고 점(○)을 끌어 옮깁니다. 회색 점선 = 측정값(조정 전).
+      방향키로 마지막에 누른 점을 미세 이동(<kbd>Shift</kbd> = 크게).
+      <b>이 글자만</b>: 이 글자에만 적용 / <b>같은 자리 전체</b>: 같은 자리(예: 받침 있는 ㅝ)의 같은 획 모두에 적용.
+    </div>
+  </section>
+  <section>
+    <div class="card" style="margin-bottom:16px">
+      <h2 id="pvTitle">같은 자리 글자</h2>
+      <div id="previews"></div>
+      <div class="info">"같은 자리 전체"로 고치면 여기 글자들이 함께 바뀝니다 (저장 전 미리보기). 글자를 누르면 불러옵니다.</div>
+    </div>
+    <div class="card">
+      <h2>저장된 조정</h2>
+      <div id="tweakList"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const N = 32, S = 1000;
+const COLORS = ["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"];
+const $ = id => document.getElementById(id);
+const svgNS = "http://www.w3.org/2000/svg";
+let meta = null, data = null, work = {}, dirty = new Set(), sel = null, lastPt = null;
+let undoStack = [], previews = [], drag = null;
+
+const zeros = () => Array.from({length: N}, () => [0, 0]);
+const clone = a => JSON.parse(JSON.stringify(a));
+const scope = () => document.querySelector("input[name=scope]:checked").value;   // "syl" | "slot"
+const key = () => scope() === "slot" ? "slot_d" : "syl_d";
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"},
+                                      body: JSON.stringify(body)} : {});
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+
+function finalPts(s, w) {
+  const a = w ? w.slot_d : (s.slot_d || zeros()), b = w ? w.syl_d : (s.syl_d || zeros());
+  return s.base.map((p, i) => [p[0] + a[i][0] + b[i][0], p[1] + a[i][1] + b[i][1]]);
+}
+const isTweaked = w => [...w.slot_d, ...w.syl_d].some(d => Math.abs(d[0]) + Math.abs(d[1]) > 1e-5);
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(svgNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const ptsAttr = pts => pts.map(p => `${(p[0]*S).toFixed(1)},${(p[1]*S).toFixed(1)}`).join(" ");
+
+function drawStroke(g, pts, color, order, width, big, labels = true) {
+  el("polyline", {points: ptsAttr(pts), fill: "none", stroke: color, "stroke-width": width,
+                  "stroke-linecap": "round", "stroke-linejoin": "round"}, g);
+  const [x1, y1] = pts[N - 3], [x2, y2] = pts[N - 1];               // 끝 화살표
+  const a = Math.atan2(y2 - y1, x2 - x1), L = big ? 0.025 : 0.05;
+  const tip = [x2 * S, y2 * S];
+  const p1 = [tip[0] - L*S*Math.cos(a - 0.45), tip[1] - L*S*Math.sin(a - 0.45)];
+  const p2 = [tip[0] - L*S*Math.cos(a + 0.45), tip[1] - L*S*Math.sin(a + 0.45)];
+  el("polygon", {points: `${tip} ${p1} ${p2}`, fill: color}, g);
+  if (!labels) return;
+  let v = [pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]];          // 시작 번호
+  const n = Math.hypot(...v) || 1; v = [v[0]/n, v[1]/n];
+  const off = big ? 0.035 : 0.07, r = big ? 20 : 40;
+  const c = [(pts[0][0] - v[0]*off)*S, (pts[0][1] - v[1]*off)*S];
+  el("circle", {cx: c[0], cy: c[1], r, fill: color}, g);
+  const t = el("text", {x: c[0], y: c[1] + r*0.38, "text-anchor": "middle", fill: "#fff",
+                        "font-size": r * 1.1, "font-weight": 700}, g);
+  t.textContent = order;
+}
+
+function glyph(svg, syl, color) {
+  const t = el("text", {x: 0, y: meta.em_top / meta.upm * S, "font-size": S * 1000 / meta.upm,
+                        "font-family": "TargetFont", fill: color}, svg);
+  t.textContent = syl;
+}
+
+function render() {
+  const svg = $("canvas"); svg.innerHTML = "";
+  el("rect", {x: 0, y: 0, width: S, height: S, fill: "#fff", stroke: "#ccc", "stroke-dasharray": "8 8"}, svg);
+  glyph(svg, data.syl, "#e6e6e6");
+  const g = el("g", {}, svg);
+  for (const s of data.strokes) {
+    const w = work[s.order], col = COLORS[(s.order - 1) % COLORS.length];
+    if (isTweaked(w))
+      el("polyline", {points: ptsAttr(s.base), fill: "none", stroke: "#aaa", "stroke-width": 3,
+                      "stroke-dasharray": "10 8"}, g);
+    drawStroke(g, finalPts(s, w), col, s.order, sel === s.order ? 9 : 5, true);
+  }
+  if (sel != null) {                                                // 선택한 획의 점
+    const s = data.strokes.find(s => s.order === sel), pts = finalPts(s, work[sel]);
+    pts.forEach((p, i) => {
+      const c = el("circle", {cx: p[0]*S, cy: p[1]*S, r: i === lastPt ? 12 : 7, fill: "#fff",
+                              stroke: COLORS[(sel - 1) % COLORS.length], "stroke-width": 3,
+                              style: "cursor:grab"}, svg);
+      c.addEventListener("pointerdown", ev => startDrag(ev, i));
+    });
+  }
+  renderStrokeList(); renderPreviews(); renderStatus();
+}
+
+function renderStrokeList() {
+  const box = $("strokeList"); box.innerHTML = "";
+  for (const s of data.strokes) {
+    const b = document.createElement("button");
+    b.textContent = `${s.order} ${s.jamo}`;
+    b.style.color = COLORS[(s.order - 1) % COLORS.length];
+    if (sel === s.order) b.classList.add("sel");
+    if (isTweaked(work[s.order])) b.classList.add("tw");
+    b.onclick = () => selectStroke(s.order);
+    box.appendChild(b);
+  }
+  const s = data.strokes.find(s => s.order === sel);
+  $("selInfo").innerHTML = s
+    ? `선택: <b>${s.order}획</b> (${s.jamo} ${({cho:"초성",jung:"중성",jong:"종성"})[s.role]}, 자모 안 ${s.idx + 1}번째 획) · 자리 <b>${s.slot}</b> · 박스 ${s.key}`
+    : "획을 고르세요.";
+}
+
+function renderPreviews() {
+  const box = $("previews"); box.innerHTML = "";
+  const s = sel != null && data.strokes.find(s => s.order === sel);
+  for (const v of previews) {
+    const d = document.createElement("div"); d.className = "pv";
+    const svg = document.createElementNS(svgNS, "svg"); svg.setAttribute("viewBox", "-40 -40 1080 1080");
+    glyph(svg, v.syl, "#ececec");
+    for (const t of v.strokes) {
+      const live = s && t.slot === s.slot && t.idx === s.idx;     // 같은 자리 같은 획 = 현재 편집 중인 자리 조정
+      const w = {slot_d: live ? work[sel].slot_d : (t.slot_d || zeros()), syl_d: t.syl_d || zeros()};
+      drawStroke(svg, finalPts(t, w), live ? COLORS[(sel - 1) % COLORS.length] : "#999",
+                 t.order, live ? 16 : 9, false, false);
+    }
+    d.appendChild(svg);
+    const cap = document.createElement("div"); cap.textContent = v.syl; d.appendChild(cap);
+    d.onclick = () => load(v.syl);
+    box.appendChild(d);
+  }
+}
+
+function renderStatus() {
+  $("status").innerHTML = dirty.size ? `<span class="dirty">저장 안 함 (${dirty.size}획)</span>` : "저장됨";
+  $("saveBtn").disabled = !dirty.size;
+  $("undoBtn").disabled = !undoStack.length;
+}
+
+async function renderTweaks() {
+  const t = await api("/api/tweaks");
+  const syl = Object.keys(t.syllable), slot = Object.keys(t.slot);
+  $("tweakList").innerHTML =
+    `<div>글자 ${syl.length}개: ${syl.map(c => `<span data-c="${c}">${c}</span>`).join("") || "-"}</div>` +
+    `<div>자리 ${slot.length}개: ${slot.map(k => `<span data-slot="${k}">${k} (${t.slot[k].map(i => +i + 1).join(",")}획)</span>`).join("") || "-"}</div>`;
+  $("tweakList").querySelectorAll("span[data-c]").forEach(e => e.onclick = () => load(e.dataset.c));
+  $("tweakList").querySelectorAll("span[data-slot]").forEach(e => e.onclick = async () => {
+    const r = await api(`/api/slot_chars?slot=${encodeURIComponent(e.dataset.slot)}&n=1`);
+    if (r.chars) load(r.chars[0]);
+  });
+}
+
+async function selectStroke(order) {
+  sel = order; lastPt = null;
+  const s = data.strokes.find(s => s.order === order);
+  const r = await api(`/api/slot_chars?slot=${encodeURIComponent(s.slot)}&n=12&exclude=${data.syl}`);
+  previews = r.chars ? await api(`/api/many?c=${encodeURIComponent(r.chars)}`) : [];
+  $("pvTitle").textContent = `같은 자리 글자 — ${s.slot} (전체 ${r.total + 1}자 중 ${previews.length}자)`;
+  render();
+}
+
+async function load(syl) {
+  syl = [...syl.trim()].find(c => c >= "가" && c <= "힣");
+  if (!syl) return;
+  if (dirty.size && !confirm("저장하지 않은 조정이 있습니다. 버리고 불러올까요?")) return;
+  data = await api(`/api/syl?c=${encodeURIComponent(syl)}`);
+  work = {}; dirty.clear(); undoStack = [];
+  for (const s of data.strokes) work[s.order] = {slot_d: clone(s.slot_d || zeros()), syl_d: clone(s.syl_d || zeros())};
+  $("charInput").value = syl;
+  history.replaceState(null, "", `#${syl}`);
+  await selectStroke(sel && sel <= data.strokes.length ? sel : 1);
+}
+
+// ───── 끌기 ─────
+function svgPoint(ev) {
+  const svg = $("canvas"), p = svg.createSVGPoint();
+  p.x = ev.clientX; p.y = ev.clientY;
+  const q = p.matrixTransform(svg.getScreenCTM().inverse());
+  return [q.x / S, q.y / S];
+}
+function weights(i) {
+  const r = +$("radius").value;
+  return Array.from({length: N}, (_, j) =>
+    $("whole").checked ? 1 : r === 0 ? (j === i ? 1 : 0) : Math.exp(-0.5 * ((j - i) / r) ** 2));
+}
+function pushUndo() { undoStack.push({work: clone(work), dirty: [...dirty]}); if (undoStack.length > 100) undoStack.shift(); }
+function moveBy(i, dx, dy, base) {
+  const k = key(), w = weights(i), arr = work[sel][k], b = base || clone(arr);
+  for (let j = 0; j < N; j++) arr[j] = [b[j][0] + w[j] * dx, b[j][1] + w[j] * dy];
+  dirty.add(sel);
+}
+function startDrag(ev, i) {
+  ev.preventDefault(); ev.target.setPointerCapture(ev.pointerId);
+  pushUndo(); lastPt = i;
+  drag = {i, start: svgPoint(ev), base: clone(work[sel][key()])};
+  const move = e => { const p = svgPoint(e); moveBy(i, p[0] - drag.start[0], p[1] - drag.start[1], drag.base); render(); };
+  const up = () => { ev.target.removeEventListener("pointermove", move); drag = null; render(); };
+  ev.target.addEventListener("pointermove", move);
+  ev.target.addEventListener("pointerup", up, {once: true});
+}
+
+async function save() {
+  if (!dirty.size) return;
+  const edits = [...dirty].map(o => ({order: o, slot_d: work[o].slot_d, syl_d: work[o].syl_d}));
+  data = await api("/api/save", {syl: data.syl, edits});
+  dirty.clear(); undoStack = [];
+  for (const s of data.strokes) work[s.order] = {slot_d: clone(s.slot_d || zeros()), syl_d: clone(s.syl_d || zeros())};
+  await selectStroke(sel); renderTweaks();
+}
+
+$("loadBtn").onclick = () => load($("charInput").value);
+$("charInput").onkeydown = e => { if (e.key === "Enter") load(e.target.value); };
+$("radius").oninput = e => $("radiusVal").textContent = e.target.value;
+$("saveBtn").onclick = save;
+$("undoBtn").onclick = () => { const u = undoStack.pop(); if (u) { work = u.work; dirty = new Set(u.dirty); render(); } };
+$("clearBtn").onclick = () => { if (sel == null) return; pushUndo(); work[sel][key()] = zeros(); dirty.add(sel); render(); };
+document.querySelectorAll("input[name=scope]").forEach(r => r.onchange = render);
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); save(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key === "z") { e.preventDefault(); $("undoBtn").click(); }
+  else if (lastPt != null && sel != null && e.key.startsWith("Arrow") && document.activeElement !== $("charInput")) {
+    e.preventDefault(); pushUndo();
+    const st = e.shiftKey ? 0.01 : 0.002;
+    const d = {ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st]}[e.key];
+    moveBy(lastPt, d[0], d[1]); render();
+  }
+});
+window.addEventListener("beforeunload", e => { if (dirty.size) { e.preventDefault(); e.returnValue = ""; } });
+
+(async () => {
+  meta = await api("/api/meta");
+  $("fontName").textContent = meta.name;
+  await load(decodeURIComponent(location.hash.slice(1)) || "뒁");
+  renderTweaks();
+})();
+</script>
+</body>
+</html>
