@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>필기 교정 확인</title>
+<style>
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#222; --muted:#888; --line:#ddd;
+          --ok:#1a7f37; --bad:#c62828; --warn:#d97706; --ref:#888; --range:#1a9e6e; --user:#3b82f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font-family: system-ui, "Noto Sans KR", sans-serif; }
+  main { max-width: 780px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin: 4px 0 12px; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  input[type=text] { width: 64px; font-size: 22px; text-align:center; padding:4px;
+                     border:1px solid var(--line); border-radius:6px; }
+  button { font-size:14px; padding:7px 12px; border:1px solid var(--line); border-radius:6px;
+           background:var(--card); cursor:pointer; }
+  button.primary { background:#222; color:#fff; border-color:#222; }
+  label { font-size:14px; display:flex; gap:4px; align-items:center; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .seg label { padding:6px 10px; background:var(--card); cursor:pointer; gap:0; }
+  .seg input { display:none; }
+  .seg label:has(input:checked) { background:#222; color:#fff; }
+  .wrap { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; }
+  canvas { background:var(--card); border:1px solid var(--line); border-radius:8px;
+           touch-action:none; width:360px; height:360px; max-width:100%; }
+  #result { flex:1; min-width:240px; background:var(--card); border:1px solid var(--line);
+            border-radius:8px; padding:12px; font-size:14px; }
+  .verdict { font-size:20px; font-weight:700; margin-bottom:8px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  h3 { font-size:14px; margin:12px 0 4px; }
+  ul { margin:6px 0; padding-left:18px; } li { margin:3px 0; }
+  .muted { color:var(--muted); }
+  details { margin-top:10px; } pre { font-size:11px; overflow:auto; max-height:260px; }
+  .legend span { display:inline-block; margin-right:10px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:3px; vertical-align:middle; }
+  .box { display:inline-block; width:12px; height:10px; margin-right:3px; vertical-align:middle; border:2px solid; }
+</style>
+</head>
+<body>
+<main>
+  <h1>필기 교정 확인</h1>
+  <div class="bar">
+    <input id="target" type="text" maxlength="1" value="가" aria-label="글자">
+    <span class="seg" role="radiogroup" aria-label="판정 모드">
+      <label><input type="radio" name="mode" value="order" checked>획순</label>
+      <label><input type="radio" name="mode" value="balance">균형</label>
+      <label><input type="radio" name="mode" value="both">둘 다</label>
+    </span>
+    <label><input id="guide" type="checkbox" checked> 정답 가이드</label>
+  </div>
+  <div class="bar">
+    <button id="undo">한 획 취소</button>
+    <button id="clear">지우기</button>
+    <button id="judge" class="primary">판정</button>
+  </div>
+  <div class="wrap">
+    <canvas id="pad" width="360" height="360"></canvas>
+    <div id="result"><span class="muted">글자를 쓰고 [판정]을 누르세요.</span></div>
+  </div>
+</main>
+<script>
+const SIZE = 360;
+const cv = document.getElementById("pad");
+const ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+const css = getComputedStyle(document.documentElement);
+const C = n => css.getPropertyValue(n).trim();
+const ROLE_KO = { cho: "초성", jung: "중성", jong: "종성" };
+
+// 고해상도 화면 대응
+const dpr = window.devicePixelRatio || 1;
+cv.width = SIZE * dpr; cv.height = SIZE * dpr;
+ctx.scale(dpr, dpr);
+
+let ref = [];          // 정답 획 (0~1)
+let strokes = [];      // 학습자 획: [[x, y, t, p], ...]
+let cur = null, t0 = null;
+let marks = null;      // 획순 판정 후 획별 색
+let boxes = null;      // 균형 판정 후 {groups: [{ub, rb, bad, exceed}], margin, glyph}
+
+const mode = () => document.querySelector('input[name=mode]:checked').value;
+
+async function loadRef() {
+  const ch = $("target").value.trim();
+  ref = [];
+  if (!ch) return draw();
+  try {
+    const r = await fetch("/ref/" + encodeURIComponent(ch));
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || r.status);
+    ref = j;
+  } catch (e) {
+    $("result").innerHTML = `<span class="bad">정답을 못 불러옴: ${e.message}</span>`;
+  }
+  draw();
+}
+
+// ---- 그리기 ----
+function line(pts, color, width, dash) {
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = width;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.setLineDash(dash || []);
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
+  ctx.stroke(); ctx.restore();
+}
+function rect(b, color, width, dash) {   // b = [x0, y0, x1, y1] (0~1)
+  const [x0, y0, x1, y1] = b.map(v => v * SIZE);
+  line([[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]], color, width, dash);
+}
+function fillRect(b, color) {
+  const [x0, y0, x1, y1] = b.map(v => v * SIZE);
+  ctx.save(); ctx.fillStyle = color; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); ctx.restore();
+}
+function text(x, y, t, color) {
+  ctx.save(); ctx.fillStyle = color; ctx.font = "12px sans-serif";
+  ctx.textBaseline = "middle"; ctx.fillText(t, x, y); ctx.restore();
+}
+function label(x, y, text, color) {
+  ctx.save();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text, x, y);
+  ctx.restore();
+}
+function arrow(pts, color) {
+  if (pts.length < 3) return;
+  const a = pts[pts.length - 3], b = pts[pts.length - 1];
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  ctx.save(); ctx.fillStyle = color; ctx.beginPath();
+  ctx.moveTo(b[0], b[1]);
+  ctx.lineTo(b[0] - 10 * Math.cos(ang - 0.4), b[1] - 10 * Math.sin(ang - 0.4));
+  ctx.lineTo(b[0] - 10 * Math.cos(ang + 0.4), b[1] - 10 * Math.sin(ang + 0.4));
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  line([[SIZE / 2, 0], [SIZE / 2, SIZE]], "#eee", 1, [4, 4]);   // 십자 보조선
+  line([[0, SIZE / 2], [SIZE, SIZE / 2]], "#eee", 1, [4, 4]);
+  if ($("guide").checked) {
+    for (const s of ref) {
+      const pts = s.points.map(([x, y]) => [x * SIZE, y * SIZE]);
+      line(pts, "#c9d6ea", 10);
+      arrow(pts, "#9fb3d1");
+      label(pts[0][0], pts[0][1], s.order, "#9fb3d1");
+    }
+  }
+  if (boxes) drawBalance();
+  strokes.forEach((s, i) => {
+    const m = marks && marks[i];
+    const color = m ? m.color : "#222";
+    line(s, color, 4, m && m.dash);
+    if (m) { arrow(s, color); label(s[0][0], s[0][1], i + 1, color); }
+  });
+  if (cur) line(cur, "#222", 4);
+}
+
+// 균형: 허용 범위(초록 점선) · 정답 위치(회색) · 내 자모 상자(파랑, 문제 있으면 빨강) · 초과 표시
+function drawBalance() {
+  const M = boxes.margin;
+  for (const g of boxes.groups) {
+    const allow = [g.rb[0] - M, g.rb[1] - M, g.rb[2] + M, g.rb[3] + M];
+    fillRect(allow, "rgba(26,158,110,0.08)");
+    rect(allow, C("--range"), 1.2, [5, 4]);
+    rect(g.rb, C("--ref"), 1.2);
+  }
+  for (const g of boxes.groups) {
+    rect(g.ub, g.bad ? C("--bad") : C("--user"), 2.5);
+    // 초과 표시: 벗어난 쪽 바깥에 빨간 선 + "초과"
+    const allow = [g.rb[0] - M, g.rb[1] - M, g.rb[2] + M, g.rb[3] + M].map(v => v * SIZE);
+    const u = g.ub.map(v => v * SIZE), red = C("--bad");
+    for (const side of Object.keys(g.exceed || {})) {
+      if (side === "bottom") { line([[u[2] + 8, allow[3]], [u[2] + 8, u[3]]], red, 2); text(u[2] + 12, (allow[3] + u[3]) / 2, "초과", red); }
+      if (side === "top")    { line([[u[2] + 8, u[1]], [u[2] + 8, allow[1]]], red, 2); text(u[2] + 12, (allow[1] + u[1]) / 2, "초과", red); }
+      if (side === "right")  { line([[allow[2], u[3] + 8], [u[2], u[3] + 8]], red, 2); text((allow[2] + u[2]) / 2 - 12, u[3] + 20, "초과", red); }
+      if (side === "left")   { line([[u[0], u[3] + 8], [allow[0], u[3] + 8]], red, 2); text((allow[0] + u[0]) / 2 - 12, u[3] + 20, "초과", red); }
+    }
+  }
+  if (boxes.glyph && boxes.glyph.bad) {      // 글자 전체 문제: 전체 상자 + 칸 중심 표시
+    rect(boxes.glyph.box, C("--bad"), 2, [6, 4]);
+    const [x0, y0, x1, y1] = boxes.glyph.box.map(v => v * SIZE);
+    line([[(x0 + x1) / 2, (y0 + y1) / 2], [SIZE / 2, SIZE / 2]], C("--bad"), 1.5, [3, 3]);
+    label(SIZE / 2, SIZE / 2, "+", "#999");
+  }
+}
+
+// ---- 필기 ----
+function pt(e) {
+  const r = cv.getBoundingClientRect();
+  const k = SIZE / r.width;
+  if (t0 === null) t0 = performance.now();
+  return [+((e.clientX - r.left) * k).toFixed(1), +((e.clientY - r.top) * k).toFixed(1),
+          +(performance.now() - t0).toFixed(1), e.pressure || 0.5];
+}
+cv.addEventListener("pointerdown", e => {
+  cv.setPointerCapture(e.pointerId);
+  marks = boxes = null; cur = [pt(e)]; draw();
+});
+cv.addEventListener("pointermove", e => {
+  if (!cur) return;
+  for (const ce of (e.getCoalescedEvents ? e.getCoalescedEvents() : [e])) cur.push(pt(ce));
+  draw();
+});
+function end() {
+  if (!cur) return;
+  if (cur.length > 1) strokes.push(cur);
+  cur = null; draw();
+}
+cv.addEventListener("pointerup", end);
+cv.addEventListener("pointercancel", end);
+
+const HINT = '<span class="muted">글자를 쓰고 [판정]을 누르세요.</span>';
+function reset() { strokes = []; cur = null; t0 = null; marks = boxes = null;
+  $("result").innerHTML = HINT; draw(); }
+
+$("undo").onclick = () => { strokes.pop(); marks = boxes = null; draw(); };
+$("clear").onclick = reset;
+$("guide").onchange = draw;
+$("target").addEventListener("change", () => { reset(); loadRef(); });
+document.querySelectorAll("input[name=mode]").forEach(r =>
+  r.addEventListener("change", () => { marks = boxes = null; $("result").innerHTML = HINT; draw(); }));
+
+// ---- 판정 ----
+$("judge").onclick = async () => {
+  const target = $("target").value.trim();
+  if (!target || !strokes.length) return;
+  const req = { target, mode: mode(), canvas: { w: SIZE, h: SIZE },
+                strokes: strokes.map(p => ({ points: p })) };
+  let out;
+  try {
+    const r = await fetch("/judge", { method: "POST", headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify(req) });
+    out = await r.json();
+    if (!r.ok || out.error) throw new Error(out.error || r.status);
+  } catch (e) {
+    $("result").innerHTML = `<span class="bad">판정 오류: ${e.message}</span>`;
+    return;
+  }
+  show(out);
+};
+
+// 획순 결과 → 획 색 + 목록
+function showOrder(o) {
+  marks = strokes.map(() => ({ color: C("--ok") }));
+  for (const e of o.errors) {
+    if (e.strokeIndex == null || !marks[e.strokeIndex]) continue;
+    if (e.type === "ORDER") marks[e.strokeIndex] = { color: C("--bad") };
+    else if (e.type === "DIRECTION" && marks[e.strokeIndex].color === C("--ok"))
+      marks[e.strokeIndex] = { color: C("--warn") };
+    else if (e.type === "EXTRA") marks[e.strokeIndex] = { color: "#999", dash: [6, 5] };
+  }
+  const items = o.errors.map(e => {
+    const who = e.jamo ? `${e.role} ${e.jamo}` : "";
+    if (e.type === "MISSING") return `<li><b>빠짐</b> — ${who} ${e.strokeNo}번째 획</li>`;
+    if (e.type === "EXTRA") return `<li><b>엉뚱한 획</b> — 쓴 ${e.strokeIndex + 1}번째 획</li>`;
+    if (e.type === "ORDER") return `<li><b>순서</b> — 쓴 ${e.strokeIndex + 1}번째 획(${who}): ` +
+                                   `${e.expected}번째로 써야 함 (실제 ${e.actual}번째)</li>`;
+    if (e.type === "DIRECTION") return `<li><b>방향</b> — 쓴 ${e.strokeIndex + 1}번째 획(${who}) 거꾸로</li>`;
+    return `<li>${e.type}</li>`;
+  }).join("");
+  return `<h3 class="${o.pass ? "ok" : "bad"}">획순 ${o.pass ? "통과" : "오류 " + o.errors.length + "개"}</h3>
+    <div class="legend muted">
+      <span><i class="dot" style="background:var(--ok)"></i>정상</span>
+      <span><i class="dot" style="background:var(--bad)"></i>순서</span>
+      <span><i class="dot" style="background:var(--warn)"></i>방향</span>
+      <span><i class="dot" style="background:#999"></i>엉뚱한 획</span>
+    </div>${items ? `<ul>${items}</ul>` : ""}`;
+}
+
+// 균형 결과 → 자모 상자 + 목록 (문구는 balance.py의 message)
+function bboxOf(list) {
+  const p = list.flat();
+  const xs = p.map(q => q[0]), ys = p.map(q => q[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+function showBalance(b, strokeMap) {
+  // 자모 상자: 학습자 획은 strokeMap으로 묶음 (서버와 같은 방식)
+  const bad = new Set(b.errors.filter(e => e.jamo).map(e => e.role + e.jamo));
+  const exceed = {};
+  for (const e of b.errors) if (e.exceed) exceed[e.role + e.jamo] = e.exceed;
+  const groups = {};
+  for (const s of ref) {
+    const k = ROLE_KO[s.role] + s.jamo;
+    (groups[k] ||= { us: [], rs: [] }).rs.push(s.points);
+  }
+  for (const m of strokeMap)
+    if (m.jamo && groups[m.role + m.jamo])
+      groups[m.role + m.jamo].us.push(strokes[m.userIndex].map(([x, y]) => [x / SIZE, y / SIZE]));
+  const glyphBad = b.errors.some(e => !e.jamo);
+  boxes = { margin: b.margin ?? 0.15,
+            groups: glyphBad ? [] :                  // 글자 전체가 걸리면 자모별은 안 봄 (balance.py와 같음)
+              Object.entries(groups).filter(([, g]) => g.us.length)
+                    .map(([k, g]) => ({ ub: bboxOf(g.us), rb: bboxOf(g.rs), bad: bad.has(k), exceed: exceed[k] })),
+            glyph: strokes.length ? { box: bboxOf(strokes.map(s => s.map(([x, y]) => [x / SIZE, y / SIZE]))),
+                                      bad: b.errors.some(e => !e.jamo) } : null };
+  const items = b.errors.map(e => `<li>${e.message}</li>`).join("");
+  return `<h3 class="${b.pass ? "ok" : "bad"}">균형 ${b.pass ? "통과" : "문제 " + b.errors.length + "개"}</h3>
+    <div class="legend muted">
+      <span><i class="box" style="border-color:var(--ref)"></i>정답 위치</span>
+      <span><i class="box" style="border-color:var(--range);border-style:dashed;background:rgba(26,158,110,.08)"></i>허용 범위</span>
+      <span><i class="box" style="border-color:var(--user)"></i>내 자모</span>
+      <span><i class="box" style="border-color:var(--bad)"></i>벗어남</span>
+    </div>${items ? `<ul>${items}</ul>` : ""}`;
+}
+
+function show(out) {
+  marks = boxes = null;
+  let html = `<div class="verdict ${out.pass ? "ok" : "bad"}">${out.pass ? "통과" : "고칠 점 있음"}</div>`;
+  if (out.order) html += showOrder(out.order);
+  if (out.balance) html += showBalance(out.balance, out.strokeMap);
+  const map = out.strokeMap.map(m =>
+    `<li>${m.userIndex + 1}번째 획 → ${m.jamo ? `${m.role} ${m.jamo} ${m.strokeNo}획` : "짝 없음"}</li>`).join("");
+  html += `<details><summary>획 짝짓기</summary><ul>${map}</ul></details>
+    <div class="muted">걸린 시간 ${out.durationMs ?? "-"} ms</div>
+    <details><summary>출력 JSON</summary><pre>${JSON.stringify(out, null, 2)}</pre></details>`;
+  $("result").innerHTML = html;
+  draw();
+}
+
+loadRef();
+</script>
+</body>
+</html>
