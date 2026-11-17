@@ -22,8 +22,9 @@ from enum import Enum
 
 from app.schemas import Canvas, Cell
 
-# accepts 기준: 1순위와 점수 차이가 이만큼 이하면 맞게 쓴 것으로 인정 (학습자에게 유리하게)
-ACCEPT_MARGIN = 0.1
+# accepts 기준 (조정 가능)
+ACCEPT_MARGIN = 0.1  # 1순위와 점수 차이가 이만큼 이하면 맞게 쓴 것으로 인정 (학습자에게 유리하게)
+MIN_ACCEPT_SCORE = 0.3  # 이보다 낮으면 인정하지 않음 (알아보기 힘든 낙서가 맞음이 되지 않게)
 
 
 class CellKind(str, Enum):
@@ -64,13 +65,14 @@ class Recognition:
     def accepts(self, char: str) -> bool:
         """char를 맞게 쓴 것으로 인정할지 (학습자에게 유리하게).
 
-        기준(조정 가능): char가 1순위이거나, 1순위와 점수 차이가 ACCEPT_MARGIN 이하면 인정.
+        기준(조정 가능): char의 점수가 MIN_ACCEPT_SCORE 이상이고,
+        1순위이거나 1순위와 점수 차이가 ACCEPT_MARGIN 이하면 인정.
         EMPTY 칸은 char == ' '일 때만 인정.
         """
         if self.kind == CellKind.EMPTY:
             return char == " "
         top, score = self.top, self.score_of(char)
-        return top is not None and score > 0 and top.score - score <= ACCEPT_MARGIN
+        return top is not None and score >= MIN_ACCEPT_SCORE and top.score - score <= ACCEPT_MARGIN
 
 
 def recognize(cell: Cell, canvas: Canvas, expected: list[str]) -> Recognition:

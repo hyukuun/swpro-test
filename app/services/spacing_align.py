@@ -13,7 +13,7 @@
     마지막 글자를 쓴 칸 뒤의 빈 칸은 무시한다 (ignored_cells)
     빈 칸은 띄어쓰기 자리에만, 글자를 쓴 칸은 글자 자리에만 맞춘다. 나머지는 더 쓴 칸·빠뜨린 자리로 본다
         - 띄어쓰기 자리에 칸이 없음         → MISSING_SPACE
-        - 정답에 없는 빈 칸, 옆 칸도 빈 칸 → DOUBLE_SPACE, 아니면 EXTRA_SPACE
+        - 정답에 없는 빈 칸                → 이어진 빈 칸 중 하나가 띄어쓰기 자리면 DOUBLE_SPACE, 아니면 EXTRA_SPACE
         - 글자 자리에 칸이 없음             → MISSING_CHAR
         - 정답에 없는 글자 칸               → EXTRA_CHAR
         - 글자 자리에 다른 글자             → CHAR_MISMATCH (recognition.accepts가 False)
@@ -115,6 +115,7 @@ def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentRe
             steps.append((i - 1, None))
             i -= 1
     steps.reverse()
+    space_cells = {ci for ci, tj in steps if ci is not None and tj is not None and target[tj] == " "}
 
     items: list[AlignmentItem] = []
     expected: dict[int, str | None] = {r.cell_index: None for r in recognitions}
@@ -128,7 +129,7 @@ def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentRe
         elif tj is None:  # 정답에 없는 칸
             rec = cells[ci]
             if rec.kind == CellKind.EMPTY:
-                error = ErrorType.DOUBLE_SPACE if _next_to_empty(cells, ci) else ErrorType.EXTRA_SPACE
+                error = ErrorType.DOUBLE_SPACE if _in_space_run(cells, ci, space_cells) else ErrorType.EXTRA_SPACE
             else:
                 error = ErrorType.EXTRA_CHAR
                 char_correct[rec.cell_index] = False
@@ -148,6 +149,11 @@ def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentRe
     return AlignmentResult(items=items, expected=expected, char_correct=char_correct, ignored_cells=ignored)
 
 
-def _next_to_empty(cells: list[Recognition], i: int) -> bool:
-    """i번째 칸 바로 앞이나 뒤가 빈 칸인지 (빈 칸 2개 연속)."""
-    return any(0 <= k < len(cells) and cells[k].kind == CellKind.EMPTY for k in (i - 1, i + 1))
+def _in_space_run(cells: list[Recognition], i: int, space_cells: set[int]) -> bool:
+    """i번째 빈 칸과 이어진 빈 칸들 중에 띄어쓰기 자리에 맞춘 칸이 있는지 (= 띄어 쓸 곳을 두 칸 이상 띄움)."""
+    lo = hi = i
+    while lo > 0 and cells[lo - 1].kind == CellKind.EMPTY:
+        lo -= 1
+    while hi + 1 < len(cells) and cells[hi + 1].kind == CellKind.EMPTY:
+        hi += 1
+    return any(k in space_cells for k in range(lo, hi + 1))

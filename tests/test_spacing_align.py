@@ -46,6 +46,12 @@ def test_recognition_score_functions():
     assert not rec.accepts("가")
 
 
+def test_scribble_with_low_scores_is_not_accepted():
+    rec = Recognition(cell_index=0, kind=CellKind.CHAR, candidates=[Candidate("가", 0.06), Candidate("나", 0.05)])
+    assert not rec.accepts("나")
+    assert not rec.accepts("가")  # 1순위여도 점수가 너무 낮으면 인정 안 함
+
+
 def test_empty_cell_is_a_space():
     rec = empty(3)
     assert rec.top is None
@@ -63,25 +69,13 @@ def test_beginner_one_to_one():
     assert result.char_correct == {0: True, 1: False}
 
 
-def test_intermediate_space_has_no_cell_and_is_not_an_error():
-    recs = [wrote(0, "보"), wrote(1, "고"), wrote(2, "십", 0.88, 싶=0.1), wrote(3, "었"), wrote(4, "어")]
-    result = align("보고 싶었어", Stage.INTERMEDIATE, recs)
-    assert summary(result) == [
-        (0, 0, None),
-        (1, 1, None),
-        (2, None, None),  # 띄어쓰기 자리: 칸 없음, 판정 안 함
-        (3, 2, E.CHAR_MISMATCH),
-        (4, 3, None),
-        (5, 4, None),
-    ]
-    assert result.expected[2] == "싶"
-
-
 def test_intermediate_matches_figma_example():
+    """피그마 중수 장면: '보고 싶었어'의 싶을 십으로 씀. 띄어쓰기 자리는 칸이 없고 판정하지 않는다."""
     recs = [wrote(0, "보"), wrote(1, "고"), wrote(2, "십", 0.88, 싶=0.1), wrote(3, "었"), wrote(4, "어")]
     result = align("보고 싶었어", Stage.INTERMEDIATE, recs)
     expected = load_fixture("grade_response_intermediate.json")["alignment"]
     assert summary(result) == [(a["targetIndex"], a["cellIndex"], a["error"]) for a in expected]
+    assert result.expected[2] == "싶"
 
 
 # ----------------------------------------------------------------- 고수: 띄어쓰기
@@ -105,6 +99,17 @@ def test_extra_space():
 def test_double_space():
     result = align("나 너", Stage.ADVANCED, cells("나__너"))
     assert summary(result) == [(0, 0, None), (None, 1, E.DOUBLE_SPACE), (1, 2, None), (2, 3, None)]
+
+
+def test_three_blanks_where_one_space_belongs():
+    result = align("나 너", Stage.ADVANCED, cells("나___너"))
+    assert [a.error for a in result.items if a.error] == [E.DOUBLE_SPACE, E.DOUBLE_SPACE]
+
+
+def test_two_blanks_where_no_space_belongs_is_extra_not_double():
+    """'나너'(붙여 씀)를 '나  너'로 쓰면 띄어 쓸 곳이 아니니 DOUBLE_SPACE가 아니라 EXTRA_SPACE."""
+    result = align("나너", Stage.ADVANCED, cells("나__너"))
+    assert [a.error for a in result.items if a.error] == [E.EXTRA_SPACE, E.EXTRA_SPACE]
 
 
 def test_missing_space_between_every_word():
