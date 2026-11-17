@@ -1,6 +1,6 @@
 """[혁윤] D-02 문장 정렬(편집 거리) 및 띄어쓰기 판정.
 
-TODO: 쓴 칸 배열을 정답 문장과 맞대어 띄어쓰기 오류와 빠뜨린 글자를 찾는다
+쓴 칸 배열을 정답 문장과 맞대어 글자·띄어쓰기 오류를 찾는다.
 
 입출력
 - 입력: 정답 문장(target), 학습 단계(stage), 칸마다의 인식 결과(recognitions, 칸 번호 순)
@@ -11,14 +11,23 @@ TODO: 쓴 칸 배열을 정답 문장과 맞대어 띄어쓰기 오류와 빠뜨
 - 고수: 편집 거리 정렬. 비용 = 1 - recognition.score_of(정답 글자)
     띄어쓰기 누락·추가, 빈 칸 2개 연속, 빠뜨린 글자, 더 쓴 글자를 찾는다
     마지막 글자를 쓴 칸 뒤의 빈 칸은 무시한다 (ignored_cells)
+    빈 칸은 띄어쓰기 자리에만, 글자를 쓴 칸은 글자 자리에만 맞춘다. 나머지는 더 쓴 칸·빠뜨린 자리로 본다
+        - 띄어쓰기 자리에 칸이 없음         → MISSING_SPACE
+        - 정답에 없는 빈 칸, 옆 칸도 빈 칸 → DOUBLE_SPACE, 아니면 EXTRA_SPACE
+        - 글자 자리에 칸이 없음             → MISSING_CHAR
+        - 정답에 없는 글자 칸               → EXTRA_CHAR
+        - 글자 자리에 다른 글자             → CHAR_MISMATCH (recognition.accepts가 False)
+    비용이 같은 정렬이 여러 개면 글자끼리 맞춘 쪽 → 빠뜨린 자리 → 더 쓴 칸 순서로 고른다
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.schemas import AlignmentItem, Stage
-from app.services.recognizer import Recognition
+from app.schemas import AlignmentItem, ErrorType, Stage
+from app.services.recognizer import CellKind, Recognition
+
+_EPS = 1e-9  # 비용 비교 오차
 
 
 @dataclass(frozen=True)
@@ -38,4 +47,107 @@ class AlignmentResult:
 
 def align(target: str, stage: Stage, recognitions: list[Recognition]) -> AlignmentResult:
     """쓴 칸 배열을 정답 문장과 맞춘다."""
-    raise NotImplementedError
+    if stage == Stage.ADVANCED:
+        return _align_advanced(target, recognitions)
+    return _align_one_to_one(target, recognitions)
+
+
+def _align_one_to_one(target: str, recognitions: list[Recognition]) -> AlignmentResult:
+    """초보·중수: 칸 i ↔ 공백을 뺀 정답의 i번째 글자. 공백 자리는 칸이 없다 (오류 아님)."""
+    items: list[AlignmentItem] = []
+    expected: dict[int, str | None] = {}
+    char_correct: dict[int, bool] = {}
+    c = 0
+    for t, ch in enumerate(target):
+        if ch == " ":
+            items.append(AlignmentItem(target_index=t, target_char=ch, cell_index=None))
+            continue
+        ok = recognitions[c].accepts(ch)
+        expected[c], char_correct[c] = ch, ok
+        items.append(
+            AlignmentItem(target_index=t, target_char=ch, cell_index=c, error=None if ok else ErrorType.CHAR_MISMATCH)
+        )
+        c += 1
+    return AlignmentResult(items=items, expected=expected, char_correct=char_correct)
+
+
+def _match_cost(rec: Recognition, ch: str) -> float | None:
+    """칸 ↔ 정답 자리 하나를 짝지을 때 비용. 짝지을 수 없으면 None."""
+    empty = rec.kind == CellKind.EMPTY
+    if ch == " ":
+        return 0.0 if empty else None
+    return None if empty else 1.0 - rec.score_of(ch)
+
+
+def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentResult:
+    """고수: 편집 거리 정렬 (칸을 건너뛰면 더 쓴 칸, 정답 자리를 건너뛰면 빠뜨린 자리, 비용 1)."""
+    written = [r.cell_index for r in recognitions if r.kind != CellKind.EMPTY]
+    last = max(written, default=-1)
+    cells = recognitions[: last + 1]
+    ignored = {r.cell_index for r in recognitions[last + 1 :]}
+    n, m = len(cells), len(target)
+
+    # cost[i][j] = 칸 i개와 정답 j자리를 맞춘 최소 비용
+    inf = float("inf")
+    cost = [[inf] * (m + 1) for _ in range(n + 1)]
+    cost[0][0] = 0.0
+    for i in range(n + 1):
+        for j in range(m + 1):
+            if i and j and (mc := _match_cost(cells[i - 1], target[j - 1])) is not None:
+                cost[i][j] = min(cost[i][j], cost[i - 1][j - 1] + mc)
+            if j:
+                cost[i][j] = min(cost[i][j], cost[i][j - 1] + 1)  # 정답 자리를 빠뜨림
+            if i:
+                cost[i][j] = min(cost[i][j], cost[i - 1][j] + 1)  # 칸을 더 씀
+
+    # 뒤에서부터 거슬러 올라가며 짝을 정한다 (같은 비용이면 짝 → 빠뜨림 → 더 씀)
+    steps: list[tuple[int | None, int | None]] = []  # (칸 위치, 정답 자리)
+    i, j = n, m
+    while i or j:
+        mc = _match_cost(cells[i - 1], target[j - 1]) if i and j else None
+        if mc is not None and abs(cost[i][j] - (cost[i - 1][j - 1] + mc)) < _EPS:
+            steps.append((i - 1, j - 1))
+            i, j = i - 1, j - 1
+        elif j and abs(cost[i][j] - (cost[i][j - 1] + 1)) < _EPS:
+            steps.append((None, j - 1))
+            j -= 1
+        else:
+            steps.append((i - 1, None))
+            i -= 1
+    steps.reverse()
+
+    items: list[AlignmentItem] = []
+    expected: dict[int, str | None] = {r.cell_index: None for r in recognitions}
+    char_correct: dict[int, bool] = {r.cell_index: True for r in recognitions}
+    for ci, tj in steps:
+        if ci is None:  # 정답 자리에 칸이 없음
+            assert tj is not None
+            ch = target[tj]
+            error = ErrorType.MISSING_SPACE if ch == " " else ErrorType.MISSING_CHAR
+            items.append(AlignmentItem(target_index=tj, target_char=ch, cell_index=None, error=error))
+        elif tj is None:  # 정답에 없는 칸
+            rec = cells[ci]
+            if rec.kind == CellKind.EMPTY:
+                error = ErrorType.DOUBLE_SPACE if _next_to_empty(cells, ci) else ErrorType.EXTRA_SPACE
+            else:
+                error = ErrorType.EXTRA_CHAR
+                char_correct[rec.cell_index] = False
+            items.append(AlignmentItem(target_index=None, target_char=None, cell_index=rec.cell_index, error=error))
+        else:
+            rec, ch = cells[ci], target[tj]
+            ok = rec.accepts(ch)
+            expected[rec.cell_index], char_correct[rec.cell_index] = ch, ok
+            items.append(
+                AlignmentItem(
+                    target_index=tj,
+                    target_char=ch,
+                    cell_index=rec.cell_index,
+                    error=None if ok else ErrorType.CHAR_MISMATCH,
+                )
+            )
+    return AlignmentResult(items=items, expected=expected, char_correct=char_correct, ignored_cells=ignored)
+
+
+def _next_to_empty(cells: list[Recognition], i: int) -> bool:
+    """i번째 칸 바로 앞이나 뒤가 빈 칸인지 (빈 칸 2개 연속)."""
+    return any(0 <= k < len(cells) and cells[k].kind == CellKind.EMPTY for k in (i - 1, i + 1))
