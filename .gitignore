@@ -8,3 +8,11 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# 검수 그림 등 스크립트 생성물 (compose.py, scripts/)
+outputs/
+
+# 정답 획 데이터·폰트 (용량이 커서 git에 올리지 않음). 폴더 자리는 .gitkeep으로 남김
+data/extracted/
+data/fonts/*
+!data/fonts/.gitkeep

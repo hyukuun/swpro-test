@@ -17,14 +17,25 @@ app/
 ├── pipeline.py                # 인식 → 정렬 → 획순 → 결과 종합 흐름
 ├── core/
 │   ├── hangul.py              # 음절 분해/조합, 겹받침, 음절 구조 유형 (D-05)
-│   └── reference.py           # 정답 획 데이터 읽기 (compose() 결과)
-├── services/
-│   ├── recognizer.py          # 칸별 글자 인식
-│   ├── stroke_checker.py      # 획 수·획순·방향
-│   ├── spacing_align.py       # 문장 정렬, 띄어쓰기
-│   ├── aggregate.py           # 단계별 결과 묶기
-│   ├── feedback_templates.py  # 설명 문장, 킹세종 템플릿
+│   ├── reference.py           # 정답 획 사전(composed_all.json) 읽기: get_reference(글자)
+│   └── stroke_vectorizer/     # 폰트 → 정답 획 데이터 만들기
+│       ├── extract.py         # 폰트 → 조합 재료 (jamo → syllables → table → mode)
+│       ├── compose.py         # 재료로 정답 획 조립: compose("뒁"), --all → 정답 획 사전
+│       ├── editor.py/.html    # 수동 조정 편집기 (로컬 웹)
+│       └── jamo_templates.py  # 획순 템플릿, 자모 구성, 글자 집합 (hangul.py와는 별개)
+└── services/
+    ├── recognizer.py          # 칸별 글자 인식
+    ├── stroke_checker.py      # 획 수·획순·방향 (SCF + 헝가리안)
+    ├── stroke_balance.py      # 글자·자모 크기와 위치 (BALANCE, stroke_checker가 부름)
+    ├── spacing_align.py       # 문장 정렬, 띄어쓰기
+    ├── aggregate.py           # 단계별 결과 묶기
+    ├── feedback_templates.py  # 설명 문장, 킹세종 템플릿
     └── llm_feedback.py        # 킹세종 LLM 한마디
+data/
+├── fonts/                     # 정답 폰트 파일 (기본 NotoSansKR-Light.ttf)
+└── extracted/<폰트 id>/       # 폰트에서 뽑은 조합 재료 (docs/extracted_data.md). 폰트 id = 파일 이름
+scripts/                       # JSON Schema 내보내기, 필기 테스트 서버, 획 데이터 검수
+outputs/                       # 검수 그림 등 생성물 (git에 올리지 않음)
 tests/
 ```
 
@@ -140,7 +151,7 @@ tests/
 | --- | --- | --- | --- | --- | --- |
 | ① 글자 인식 | `recognize` | `services/recognizer.py` | 혁윤 | 칸, 칸 크기, 올 수 있는 정답 글자 | 칸 종류(빈 칸·점·글자) + 점수 높은 순 후보 |
 | ② 줄 맞춤 | `align` | `services/spacing_align.py` | 혁윤 | 정답 문장, 단계, ①의 결과 전부 | 칸별 정답 글자·맞음 여부, 띄어쓰기 오류 |
-| ③ 획순 | `check_strokes` | `services/stroke_checker.py` | 정진 | 정답 글자, 칸 크기, 학습자 획 | 통과 여부, 획 오류, 획 짝, 걸린 시간 |
+| ③ 획순 | `check_strokes` | `services/stroke_checker.py` (+ `stroke_balance.py`) | 정진 | 정답 글자, 칸 크기, 학습자 획 | 통과 여부, 획순·균형 오류, 획 짝, 걸린 시간 |
 | ④ 묶기 | `aggregate` | `services/aggregate.py` | 혁윤 | 요청, ①②③ 결과 | 칸 결과, 줄 맞춤, 어절 결과, correct·perfect |
 | ⑤ 설명 | `explanations` | `services/feedback_templates.py` | 혁윤 | 요청, ④ 결과 | 설명 문장 목록 |
 | ⑥ 말풍선 | `sejong_message` / `sejong_line` | `feedback_templates.py` / `llm_feedback.py` | 혁윤 | 요청, ④ 결과 | 킹세종 말풍선 (LLM이 실패하면 템플릿) |
@@ -172,6 +183,36 @@ GitHub에 push하거나 PR을 올리면 `.github/workflows/ci.yml`이 위 네 �
 설정은 `ruff.toml`, `mypy.ini`에 있습니다. 테스트에서 예시 JSON을 읽거나 클라이언트를 만들 때는 `tests/helpers.py`를 씁니다.
 
 > Windows에서 mypy가 `DLL load failed`로 실행되지 않으면 프로젝트 폴더 경로가 너무 긴 경우예요. 경로가 짧은 곳(예: `C:\dev\`)에 clone하면 됩니다.
+
+## 정답 획 데이터 (stroke_vectorizer)
+
+음절의 정답 획(획 순서 · 소속 자모 · 중심선 32점, 0~1)을 **자모 획을 음절 안 자리(박스)에 배치**해서 만듭니다.
+- 폰트는 `data/fonts/` 안의 파일이고, 기본은 `NotoSansKR-Light.ttf`입니다.
+- `extract`가 폰트에서 조합 재료를 뽑아 `data/extracted/<폰트 id>/`에 저장합니다 (폰트 id = 파일 이름에서 확장자를 뺀 것).
+- `compose --all`이 그 재료로 11,172자 + 자모 단독 51개의 정답 획을 조립해 **정답 획 사전** `composed_all.json`으로 저장합니다.
+- 서버는 `core/reference.py`의 `get_reference(글자)`로 이 사전에서 찾아 씁니다 (처음 한 번 읽음, 약 2초).
+- 순서: `extract` → (`editor`로 수동 조정) → `compose --all`. 재료나 조정을 바꿨으면 `compose --all`을 다시 해야 서버에 반영됩니다.
+- 전체 순서, 조립 방법, 수동 조정 반영 방식, 파일별 형식은 [docs/extracted_data.md](docs/extracted_data.md)에 있습니다.
+
+모든 명령은 **프로젝트 루트에서 `python -m`** 으로 실행합니다 (`python 파일경로.py`로는 `app`을 못 찾습니다).
+모든 명령에 `--font <폰트>`를 줄 수 있습니다. `data/fonts/` 안의 파일 이름(`DONGGUK-UNIVERSITY`) 또는 파일 경로를 넣습니다.
+
+```bash
+# 만들기
+python -m app.core.stroke_vectorizer.extract                             # 기본 폰트 전 과정
+python -m app.core.stroke_vectorizer.extract --font DONGGUK-UNIVERSITY    # 다른 폰트 (data/fonts/에 넣은 뒤)
+python -m app.core.stroke_vectorizer.extract --steps table,mode           # 일부 단계만 (jamo,syllables,table,mode)
+python -m app.core.stroke_vectorizer.compose --all                      # 정답 획 사전 → data/extracted/<폰트 id>/composed_all.json
+python -m app.core.stroke_vectorizer.editor                               # 수동 조정 편집기 → http://localhost:8765
+
+# 확인 (그림은 outputs/에 저장)
+python -m app.core.stroke_vectorizer.compose 뒁 깜 와   # 정답 획 조립 결과 → outputs/compose.png
+python -m scripts.jamo_check                            # 자모 51개 추출 결과 → outputs/jamo_check.png
+python -m scripts.debug 계 ㅘ                           # 글자·자모 추출 과정 (실패 원인 찾기) → outputs/debug.png
+
+# 판정 엔진을 손으로 써서 확인 (정답은 서버와 같은 정답 획 사전)
+python -m scripts.hand_writing_confirm                  # 필기 테스트 → http://localhost:5000
+```
 
 ## 스프링부트 연동 (D-09)
 
