@@ -86,7 +86,7 @@ class ErrorType(str, Enum):
     # 띄어쓰기 (고수, alignment[].error 에만)
     MISSING_SPACE = "MISSING_SPACE"  # 띄어야 하는데 붙여 씀
     EXTRA_SPACE = "EXTRA_SPACE"  # 붙여야 하는데 띄어 씀
-    DOUBLE_SPACE = "DOUBLE_SPACE"  # 빈 칸 2개 연속
+    DOUBLE_SPACE = "DOUBLE_SPACE"  # 띄어 쓸 곳에 빈 칸을 2개 이상 둠 (붙여 쓸 곳의 빈 칸은 EXTRA_SPACE)
     # 획·균형 (D-04, 글자가 맞은 칸만) — 정진 명세 3번과 이름이 같아야 서버 집계가 맞는다
     ORDER = "ORDER"  # 순서가 틀린 획 (최소한으로 옮겨야 할 획만)
     DIRECTION = "DIRECTION"  # 거꾸로 쓴 획
