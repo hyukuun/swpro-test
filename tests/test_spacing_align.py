@@ -162,10 +162,12 @@ def test_stray_dot_after_the_sentence_is_ignored_with_the_blanks_before_it():
     assert result.ignored_cells == {3, 4, 5}
 
 
-def test_stray_dot_between_letters_is_ignored():
+def test_stray_dot_cell_counts_as_a_blank_cell():
+    """점이 찍힌 칸도 비워 둔 칸과 같다: 붙여 쓸 곳에 있으면 띄어쓰기 추가, 빈 칸 옆이면 두 칸 띄움."""
     result = align("가나", Stage.ADVANCED, [wrote(0, "가"), mark(1), wrote(2, "나")])
-    assert summary(result) == [(0, 0, None), (1, 2, None)]
-    assert result.ignored_cells == {1}
+    assert summary(result) == [(0, 0, None), (None, 1, E.EXTRA_SPACE), (1, 2, None)]
+    result = align("나 너", Stage.ADVANCED, [wrote(0, "나"), empty(1), mark(2), wrote(3, "너")])
+    assert [a.error for a in result.items if a.error] == [E.DOUBLE_SPACE]
 
 
 def test_clear_comma_in_a_space_cell_is_a_real_comma():
@@ -175,7 +177,7 @@ def test_clear_comma_in_a_space_cell_is_a_real_comma():
     assert [a.error for a in result.items if a.error] == [E.EXTRA_CHAR, E.MISSING_SPACE]
 
 
-def test_faint_comma_is_treated_as_a_stray_mark():
+def test_faint_comma_is_treated_as_a_stray_mark():  # 흐릿하면 실수 점 = 빈 칸 → 띄어쓰기 자리
     faint = Recognition(cell_index=1, kind=CellKind.MARK, candidates=[Candidate(",", 0.2)])
     result = align("나 너", Stage.ADVANCED, [wrote(0, "나"), faint, wrote(2, "너")])
     assert [a.error for a in result.items if a.error] == []

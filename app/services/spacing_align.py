@@ -11,8 +11,8 @@
 - 고수: 편집 거리 정렬. 비용 = 1 - recognition.score_of(정답 글자)
     띄어쓰기 누락·추가, 빈 칸 2개 연속, 빠뜨린 글자, 더 쓴 글자를 찾는다
     빈 칸은 띄어쓰기 자리에만, 글자를 쓴 칸은 글자 자리에만 맞춘다. 나머지는 더 쓴 칸·빠뜨린 자리로 본다
-    점·짧은 표시(MARK) 칸은 문장부호 자리에 맞춘다. 다만 '실수로 찍은 점'이면
-        띄어쓰기 자리에서는 빈 칸으로 보고, 어디에도 맞지 않으면 무시한다 (오류 아님)
+    점·짧은 표시(MARK) 칸은 문장부호 자리에 맞춘다. 문장부호 자리가 아니면
+        '실수로 찍은 점' 칸은 빈 칸과 똑같이 본다 (원고지 한 칸 = 한 자리라 비워 둔 칸과 같음)
         실수로 찍은 점 = 1순위가 마침표이거나 점수가 낮은 MARK. 또렷한 쉼표는 진짜 문장부호로 본다
     정답을 다 쓴 뒤의 빈 칸·점은 무시한다 (ignored_cells)
         - 띄어쓰기 자리에 칸이 없음         → MISSING_SPACE
@@ -44,7 +44,7 @@ class AlignmentResult:
     expected: dict[int, str | None]
     # 칸 번호 → 글자를 맞게 썼는지 (recognition.accepts 결과). 빈 칸이 띄어쓰기 자리면 True
     char_correct: dict[int, bool]
-    # 고수: 판정하지 않고 무시한 칸 (다 쓴 뒤 남은 빈 칸·점, 실수로 찍은 점)
+    # 고수: 판정하지 않고 무시한 칸 (다 쓴 뒤 남은 빈 칸, 실수 점 칸 포함)
     ignored_cells: set[int] = field(default_factory=set)
 
 
@@ -86,11 +86,16 @@ def _is_stray_mark(rec: Recognition) -> bool:
     return top is None or top.char == "." or top.score < MIN_ACCEPT_SCORE
 
 
+def _is_blank(rec: Recognition) -> bool:
+    """빈 칸으로 볼 칸인지: 획이 없거나 실수로 찍은 점만 있음."""
+    return rec.kind == CellKind.EMPTY or _is_stray_mark(rec)
+
+
 def _match_cost(rec: Recognition, ch: str) -> float | None:
     """칸 ↔ 정답 자리 하나를 짝지을 때 비용. 짝지을 수 없으면 None."""
-    if ch == " ":  # 띄어쓰기 자리: 빈 칸, 또는 실수로 점이 찍힌 칸
-        return 0.0 if rec.kind == CellKind.EMPTY or _is_stray_mark(rec) else None
-    return None if rec.kind == CellKind.EMPTY else 1.0 - rec.score_of(ch)
+    if ch == " ":  # 띄어쓰기 자리: 빈 칸 (실수 점 칸 포함)
+        return 0.0 if _is_blank(rec) else None
+    return None if rec.kind == CellKind.EMPTY else 1.0 - rec.score_of(ch)  # 점 칸은 문장부호 자리에 맞을 수 있음
 
 
 def _skip_cost(rec: Recognition, done: bool) -> float:
@@ -98,11 +103,7 @@ def _skip_cost(rec: Recognition, done: bool) -> float:
 
     0이면 무시한 칸(오류 아님), 1이면 더 쓴 칸(오류).
     """
-    if _is_stray_mark(rec):
-        return 0.0  # 실수로 찍은 점
-    if rec.kind == CellKind.EMPTY and done:
-        return 0.0  # 다 쓴 뒤 남은 빈 칸
-    return 1.0
+    return 0.0 if done and _is_blank(rec) else 1.0  # 다 쓴 뒤 남은 빈 칸(실수 점 칸 포함)만 무시
 
 
 def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentResult:
@@ -165,7 +166,7 @@ def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentRe
             items.append(AlignmentItem(target_index=tj, target_char=ch, cell_index=None, error=error))
         elif ci is not None and tj is None:  # 정답에 없는 칸
             rec = cells[ci]
-            if rec.kind == CellKind.EMPTY:
+            if _is_blank(rec):
                 error = ErrorType.DOUBLE_SPACE if _in_space_run(cells, ci, space_cells) else ErrorType.EXTRA_SPACE
             else:
                 error = ErrorType.EXTRA_CHAR
@@ -189,8 +190,8 @@ def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentRe
 def _in_space_run(cells: list[Recognition], i: int, space_cells: set[int]) -> bool:
     """i번째 빈 칸과 이어진 빈 칸들 중에 띄어쓰기 자리에 맞춘 칸이 있는지 (= 띄어 쓸 곳을 두 칸 이상 띄움)."""
     lo = hi = i
-    while lo > 0 and cells[lo - 1].kind == CellKind.EMPTY:
+    while lo > 0 and _is_blank(cells[lo - 1]):
         lo -= 1
-    while hi + 1 < len(cells) and cells[hi + 1].kind == CellKind.EMPTY:
+    while hi + 1 < len(cells) and _is_blank(cells[hi + 1]):
         hi += 1
     return any(k in space_cells for k in range(lo, hi + 1))
