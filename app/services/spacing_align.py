@@ -11,8 +11,9 @@
 - 고수: 편집 거리 정렬. 비용 = 1 - recognition.score_of(정답 글자)
     띄어쓰기 누락·추가, 빈 칸 2개 연속, 빠뜨린 글자, 더 쓴 글자를 찾는다
     빈 칸은 띄어쓰기 자리에만, 글자를 쓴 칸은 글자 자리에만 맞춘다. 나머지는 더 쓴 칸·빠뜨린 자리로 본다
-    점·짧은 표시(MARK) 칸은 문장부호 자리에 맞추거나, 띄어쓰기 자리에서는 빈 칸으로 본다.
-    어디에도 맞지 않으면 실수로 찍은 점으로 보고 무시한다 (오류 아님)
+    점·짧은 표시(MARK) 칸은 문장부호 자리에 맞춘다. 다만 '실수로 찍은 점'이면
+        띄어쓰기 자리에서는 빈 칸으로 보고, 어디에도 맞지 않으면 무시한다 (오류 아님)
+        실수로 찍은 점 = 1순위가 마침표이거나 점수가 낮은 MARK. 또렷한 쉼표는 진짜 문장부호로 본다
     정답을 다 쓴 뒤의 빈 칸·점은 무시한다 (ignored_cells)
         - 띄어쓰기 자리에 칸이 없음         → MISSING_SPACE
         - 정답에 없는 빈 칸                → 이어진 빈 칸 중 하나가 띄어쓰기 자리면 DOUBLE_SPACE, 아니면 EXTRA_SPACE
@@ -27,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.schemas import AlignmentItem, ErrorType, Stage
-from app.services.recognizer import CellKind, Recognition
+from app.services.recognizer import MIN_ACCEPT_SCORE, CellKind, Recognition
 
 _EPS = 1e-9  # 비용 비교 오차
 
@@ -73,10 +74,22 @@ def _align_one_to_one(target: str, recognitions: list[Recognition]) -> Alignment
     return AlignmentResult(items=items, expected=expected, char_correct=char_correct)
 
 
+def _is_stray_mark(rec: Recognition) -> bool:
+    """실수로 찍은 점일 수 있는 칸인지.
+
+    작은 점(마침표 모양)은 펜이 닿은 실수와 구분하기 어려워서 너그럽게 본다.
+    마침표가 아닌 문장부호(쉼표 등)로 또렷하게 인식됐으면 진짜 문장부호다.
+    """
+    if rec.kind != CellKind.MARK:
+        return False
+    top = rec.top
+    return top is None or top.char == "." or top.score < MIN_ACCEPT_SCORE
+
+
 def _match_cost(rec: Recognition, ch: str) -> float | None:
     """칸 ↔ 정답 자리 하나를 짝지을 때 비용. 짝지을 수 없으면 None."""
     if ch == " ":  # 띄어쓰기 자리: 빈 칸, 또는 실수로 점이 찍힌 칸
-        return 0.0 if rec.kind in (CellKind.EMPTY, CellKind.MARK) else None
+        return 0.0 if rec.kind == CellKind.EMPTY or _is_stray_mark(rec) else None
     return None if rec.kind == CellKind.EMPTY else 1.0 - rec.score_of(ch)
 
 
@@ -85,7 +98,7 @@ def _skip_cost(rec: Recognition, done: bool) -> float:
 
     0이면 무시한 칸(오류 아님), 1이면 더 쓴 칸(오류).
     """
-    if rec.kind == CellKind.MARK:
+    if _is_stray_mark(rec):
         return 0.0  # 실수로 찍은 점
     if rec.kind == CellKind.EMPTY and done:
         return 0.0  # 다 쓴 뒤 남은 빈 칸
@@ -146,12 +159,11 @@ def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentRe
     expected: dict[int, str | None] = {r.cell_index: None for r in recognitions}
     char_correct: dict[int, bool] = {r.cell_index: True for r in recognitions}
     for ci, tj in steps:
-        if ci is None:  # 정답 자리에 칸이 없음
-            assert tj is not None
+        if ci is None and tj is not None:  # 정답 자리에 칸이 없음
             ch = target[tj]
             error = ErrorType.MISSING_SPACE if ch == " " else ErrorType.MISSING_CHAR
             items.append(AlignmentItem(target_index=tj, target_char=ch, cell_index=None, error=error))
-        elif tj is None:  # 정답에 없는 칸
+        elif ci is not None and tj is None:  # 정답에 없는 칸
             rec = cells[ci]
             if rec.kind == CellKind.EMPTY:
                 error = ErrorType.DOUBLE_SPACE if _in_space_run(cells, ci, space_cells) else ErrorType.EXTRA_SPACE
@@ -159,7 +171,7 @@ def _align_advanced(target: str, recognitions: list[Recognition]) -> AlignmentRe
                 error = ErrorType.EXTRA_CHAR
                 char_correct[rec.cell_index] = False
             items.append(AlignmentItem(target_index=None, target_char=None, cell_index=rec.cell_index, error=error))
-        else:
+        elif ci is not None and tj is not None:  # 칸 ↔ 정답 자리
             rec, ch = cells[ci], target[tj]
             ok = ch == " " or rec.accepts(ch)  # 띄어쓰기 자리는 빈 칸이든 실수 점이든 맞음
             expected[rec.cell_index], char_correct[rec.cell_index] = ch, ok

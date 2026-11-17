@@ -168,6 +168,25 @@ def test_stray_dot_between_letters_is_ignored():
     assert result.ignored_cells == {1}
 
 
+def test_clear_comma_in_a_space_cell_is_a_real_comma():
+    """또렷한 쉼표는 실수 점이 아니다: '나 너'를 '나,너'로 쓰면 쉼표를 더 쓰고 띄어쓰기를 빠뜨린 것."""
+    comma = Recognition(cell_index=1, kind=CellKind.MARK, candidates=[Candidate(",", 0.95)])
+    result = align("나 너", Stage.ADVANCED, [wrote(0, "나"), comma, wrote(2, "너")])
+    assert [a.error for a in result.items if a.error] == [E.EXTRA_CHAR, E.MISSING_SPACE]
+
+
+def test_faint_comma_is_treated_as_a_stray_mark():
+    faint = Recognition(cell_index=1, kind=CellKind.MARK, candidates=[Candidate(",", 0.2)])
+    result = align("나 너", Stage.ADVANCED, [wrote(0, "나"), faint, wrote(2, "너")])
+    assert [a.error for a in result.items if a.error] == []
+
+
+def test_comma_is_matched_to_a_comma():
+    comma = Recognition(cell_index=1, kind=CellKind.MARK, candidates=[Candidate(",", 0.95)])
+    result = align("나,너", Stage.ADVANCED, [wrote(0, "나"), comma, wrote(2, "너")])
+    assert summary(result) == [(0, 0, None), (1, 1, None), (2, 2, None)]
+
+
 def test_dot_is_matched_to_a_period():
     result = align("나.", Stage.ADVANCED, [wrote(0, "나"), mark(1)])
     assert summary(result) == [(0, 0, None), (1, 1, None)]
