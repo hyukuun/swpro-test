@@ -145,6 +145,40 @@ def test_blank_where_a_char_should_be_is_missing_char():
     assert {a.error for a in result.items if a.error} == {E.EXTRA_SPACE, E.MISSING_CHAR}
 
 
+def mark(i: int) -> Recognition:
+    """칸 i에 점·짧은 표시만 있음 (마침표·쉼표 후보)."""
+    return Recognition(cell_index=i, kind=CellKind.MARK, candidates=[Candidate(".", 0.6), Candidate(",", 0.3)])
+
+
+def test_stray_dot_in_a_space_cell_counts_as_the_space():
+    """띄어쓰기 칸에 펜이 닿아 점이 찍혀도 띄어 쓴 것으로 본다."""
+    result = align("나 너", Stage.ADVANCED, [wrote(0, "나"), mark(1), wrote(2, "너")])
+    assert summary(result) == [(0, 0, None), (1, 1, None), (2, 2, None)]
+
+
+def test_stray_dot_after_the_sentence_is_ignored_with_the_blanks_before_it():
+    result = align("나 너", Stage.ADVANCED, [wrote(0, "나"), empty(1), wrote(2, "너"), empty(3), empty(4), mark(5)])
+    assert [a.error for a in result.items if a.error] == []
+    assert result.ignored_cells == {3, 4, 5}
+
+
+def test_stray_dot_between_letters_is_ignored():
+    result = align("가나", Stage.ADVANCED, [wrote(0, "가"), mark(1), wrote(2, "나")])
+    assert summary(result) == [(0, 0, None), (1, 2, None)]
+    assert result.ignored_cells == {1}
+
+
+def test_dot_is_matched_to_a_period():
+    result = align("나.", Stage.ADVANCED, [wrote(0, "나"), mark(1)])
+    assert summary(result) == [(0, 0, None), (1, 1, None)]
+
+
+def test_stopping_early_leaves_the_rest_missing_and_blanks_ignored():
+    result = align("가나다", Stage.ADVANCED, cells("가___"))
+    assert summary(result) == [(0, 0, None), (1, None, E.MISSING_CHAR), (2, None, E.MISSING_CHAR)]
+    assert result.ignored_cells == {1, 2, 3}
+
+
 def test_nothing_written_is_all_missing():
     result = align("나 너", Stage.ADVANCED, cells("_____"))
     assert summary(result) == [(0, None, E.MISSING_CHAR), (1, None, E.MISSING_SPACE), (2, None, E.MISSING_CHAR)]
