@@ -6,6 +6,9 @@ pydantic==2.14.3
 numpy==2.5.5
 scipy==1.18.1
 
+# 킹세종 LLM 말풍선 (app/services/llm_feedback.py, 키가 없으면 쓰지 않음)
+google-genai==3.6.1
+
 # 정답 획 데이터 만들기·검수 (app/core/stroke_vectorizer/, scripts/)
 fonttools==4.68.0
 scikit-image==0.26.0
