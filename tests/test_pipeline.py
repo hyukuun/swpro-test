@@ -1,24 +1,28 @@
 """판정 흐름(/grade): 임시 인식으로도 띄어쓰기·획순 판정이 진짜로 나오는지.
 
-획순 판정은 정답 획 데이터가 필요해서, 여기서는 stroke_checker.check_strokes를 바꿔 끼워 흐름만 확인한다.
+획순 판정은 정답 획 데이터가 필요해서, 여기서는 정답 획 사전(reference)과 stroke_checker.check_strokes를
+바꿔 끼워 흐름만 확인한다. 기본은 '사전 파일이 있고 모든 글자가 사전에 있음'.
 """
 
 import pytest
 
+from app.core import reference
 from app.schemas import CellError, StrokeMapItem
 from app.services import stroke_checker
 from app.services.stroke_checker import StrokeCheckResult
 from tests.helpers import client, load_request
 
 
+@pytest.fixture(autouse=True)
+def fake_reference(monkeypatch):
+    monkeypatch.setattr(reference, "reference_available", lambda: True)
+    monkeypatch.setattr(reference, "has_reference", lambda char: True)
+
+
 @pytest.fixture
 def no_reference(monkeypatch):
-    """정답 획 데이터가 없는 상황 (CI와 같음)."""
-
-    def missing(*_args, **_kwargs):
-        raise FileNotFoundError("정답 획 사전이 없어요")
-
-    monkeypatch.setattr(stroke_checker, "check_strokes", missing)
+    """정답 획 사전 파일이 없는 상황 (CI와 같음)."""
+    monkeypatch.setattr(reference, "reference_available", lambda: False)
 
 
 def test_advanced_missing_space_is_judged(no_reference):
@@ -115,6 +119,48 @@ def test_stroke_check_crash_skips_only_that_cell(monkeypatch):
     assert [c["strokePass"] for c in body["cells"]] == [True, None]
     assert body["correct"] is True and body["perfect"] is False
     assert body["sejong"]["text"] == "글자와 띄어쓰기는 다 맞았어요"
+
+
+def test_key_error_inside_judging_is_logged_as_a_bug(monkeypatch, caplog):
+    """판정 코드 안에서 난 KeyError는 '사전에 없는 글자'가 아니라 판정 오류로, 오류 위치와 함께 기록."""
+
+    def buggy_check(target, canvas, strokes):
+        return {}["role"]
+
+    monkeypatch.setattr(stroke_checker, "check_strokes", buggy_check)
+    body = client.post("/grade", json=load_request("beginner")).json()
+    assert [c["strokePass"] for c in body["cells"]] == [None, None]
+    assert "사전에 없는 글자" not in caplog.text
+    errors = [r for r in caplog.records if "획순 판정 중 오류" in r.getMessage()]
+    assert len(errors) == 2 and all(r.exc_info for r in errors)
+
+
+def test_char_missing_from_reference_skips_only_that_cell(monkeypatch, caplog):
+    seen = []
+
+    def fake_check(target, canvas, strokes):
+        seen.append(target)
+        return StrokeCheckResult(passed=True)
+
+    monkeypatch.setattr(reference, "has_reference", lambda char: char != "다")
+    monkeypatch.setattr(stroke_checker, "check_strokes", fake_check)
+    body = client.post("/grade", json=load_request("beginner")).json()
+    assert seen == ["바"]
+    assert [c["strokePass"] for c in body["cells"]] == [True, None]
+    assert "정답 획 사전에 없는 글자라 획순 판정을 건너뜀: 다" in caplog.text
+
+
+def test_broken_reference_file_skips_all_and_logs_once(monkeypatch, caplog):
+    """사전 파일이 깨져 읽지 못하면 → 모든 칸 건너뜀, 오류 로그는 요청당 한 번."""
+
+    def broken(char):
+        raise ValueError("JSON이 깨졌어요")
+
+    monkeypatch.setattr(reference, "has_reference", broken)
+    res = client.post("/grade", json=load_request("beginner"))
+    assert res.status_code == 200
+    assert all(c["strokePass"] is None for c in res.json()["cells"])
+    assert len([r for r in caplog.records if "정답 획 사전을 읽지 못해" in r.getMessage()]) == 1
 
 
 def test_all_stroke_checks_pass_is_perfect(monkeypatch):

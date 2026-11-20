@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 
 from app.config import ENGINE_VERSION
+from app.core import reference
 from app.schemas import GradeRequest, GradeResponse, Stage
 from app.services import feedback_templates, spacing_align, stroke_checker
 from app.services.aggregate import aggregate, needs_stroke_check
@@ -77,30 +78,38 @@ def _check_strokes(req: GradeRequest, alignment: AlignmentResult) -> dict[int, S
     """글자를 맞게 쓴 한글 칸만 획순·균형 판정 (aggregate.needs_stroke_check).
 
     건너뛰는 경우 (건너뛴 칸이 있으면 aggregate가 perfect를 false로 둔다):
-    - 정답 획 데이터 파일이 없음 → 모든 칸 (로그 경고 한 번)
+    - 정답 획 사전 파일이 없음 → 모든 칸 (로그 경고 한 번)
+    - 사전 파일을 읽지 못함 (깨진 파일 등) → 모든 칸 (요청마다 오류 로그 한 번)
     - 사전에 없는 글자 → 그 칸
-    - 판정 중 예상 못 한 오류 → 그 칸 (로그에 오류 전체). 칸 하나 때문에 /grade 전체가 실패하지 않게
+    - 판정 중 오류 → 그 칸 (오류 위치까지 로그). 칸 하나 때문에 /grade 전체가 실패하지 않게
+
+    원인은 오류 종류로 짐작하지 않고 판정 전에 직접 확인한다. 판정 코드 버그로 난 KeyError·FileNotFoundError가
+    '사전에 없는 글자'·'사전 파일 없음'으로 잘못 기록되지 않게 하려는 것.
     """
     global _warned_no_reference
+    cells = [c for c in req.cells if needs_stroke_check(c, alignment)]
+    if not cells:
+        return {}
+    if not reference.reference_available():
+        if not _warned_no_reference:
+            log.warning("정답 획 사전이 없어 획순 판정을 건너뜀 (python -m app.core.stroke_vectorizer.compose --all)")
+            _warned_no_reference = True
+        return {}
+
     results: dict[int, StrokeCheckResult] = {}
-    for cell in req.cells:
-        if not needs_stroke_check(cell, alignment):
-            continue
+    for cell in cells:
         expected = alignment.expected[cell.index]
         assert expected is not None  # needs_stroke_check가 확인함
         try:
-            results[cell.index] = stroke_checker.check_strokes(expected, req.canvas, cell.strokes)
-        except FileNotFoundError:
-            if not _warned_no_reference:
-                log.warning(
-                    "정답 획 데이터가 없어 획순 판정을 건너뜀 (python -m app.core.stroke_vectorizer.compose --all)"
-                )
-                _warned_no_reference = True
-            return {}
-        except KeyError:
-            log.warning("정답 획 데이터에 없는 글자라 획순 판정을 건너뜀: %s", expected)
+            known = reference.has_reference(expected)
         except Exception:
-            # 예상 못 한 오류(특이한 손글씨 입력, 판정 코드 버그 등): 이 칸만 '획 판정 못 함'으로 두고
-            # 나머지 판정 결과는 그대로 돌려준다. 원인을 찾을 수 있게 오류 전체를 서버 로그에 남긴다.
+            log.exception("정답 획 사전을 읽지 못해 획순 판정을 건너뜀")
+            return {}
+        if not known:
+            log.warning("정답 획 사전에 없는 글자라 획순 판정을 건너뜀: %s", expected)
+            continue
+        try:
+            results[cell.index] = stroke_checker.check_strokes(expected, req.canvas, cell.strokes)
+        except Exception:
             log.exception("획순 판정 중 오류, 이 칸은 건너뜀: 칸 %d, 글자 %s", cell.index, expected)
     return results
