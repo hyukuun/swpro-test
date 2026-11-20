@@ -8,6 +8,7 @@
 
 import pytest
 
+from app import pipeline
 from app.core import reference
 from app.schemas import CellError, StrokeMapItem
 from app.services import stroke_checker
@@ -18,14 +19,14 @@ from tests.helpers import assume_target_written, client, load_request
 @pytest.fixture(autouse=True)
 def fake_reference(monkeypatch):
     assume_target_written(monkeypatch)
-    monkeypatch.setattr(reference, "reference_available", lambda: True)
+    monkeypatch.setattr(pipeline, "reference_available", lambda: True)
     monkeypatch.setattr(reference, "has_reference", lambda char: True)
 
 
 @pytest.fixture
 def no_reference(monkeypatch):
     """정답 획 사전 파일이 없는 상황 (CI와 같음)."""
-    monkeypatch.setattr(reference, "reference_available", lambda: False)
+    monkeypatch.setattr(pipeline, "reference_available", lambda: False)
 
 
 def test_advanced_missing_space_is_judged(no_reference):

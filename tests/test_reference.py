@@ -6,13 +6,14 @@
 
 import pytest
 
+from app import pipeline
 from app.config import ENGINE_VERSION
 from app.core import reference
 from app.schemas import ReferenceResponse
 from tests.helpers import client
 
 needs_data = pytest.mark.skipif(
-    not reference.reference_available(), reason="정답 획 사전 없음 (python -m app.core.stroke_vectorizer.compose --all)"
+    not pipeline.reference_available(), reason="정답 획 사전 없음 (python -m app.core.stroke_vectorizer.compose --all)"
 )
 
 
@@ -55,7 +56,7 @@ def test_not_one_hangul_char_is_422(char):
 
 
 def test_char_missing_from_reference_is_404(monkeypatch):
-    monkeypatch.setattr(reference, "reference_available", lambda: True)
+    monkeypatch.setattr(pipeline, "reference_available", lambda: True)
     monkeypatch.setattr(reference, "has_reference", lambda char: False)
     res = client.get("/reference/똠")
     assert res.status_code == 404
@@ -63,7 +64,7 @@ def test_char_missing_from_reference_is_404(monkeypatch):
 
 
 def test_no_reference_data_is_503(monkeypatch):
-    monkeypatch.setattr(reference, "reference_available", lambda: False)
+    monkeypatch.setattr(pipeline, "reference_available", lambda: False)
     res = client.get("/reference/가")
     assert res.status_code == 503
     assert res.json() == {

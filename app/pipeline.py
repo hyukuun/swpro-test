@@ -25,6 +25,7 @@ import logging
 
 from app.config import ENGINE_VERSION
 from app.core import reference
+from app.core.stroke_vectorizer.compose import composed_path
 from app.schemas import Explanation, GradeRequest, GradeResponse, SejongMessage, Stage
 from app.services import feedback_templates, llm_feedback, spacing_align, stroke_checker
 from app.services.aggregate import AggregateResult, aggregate, needs_stroke_check
@@ -36,6 +37,11 @@ log = logging.getLogger(__name__)
 
 _warned_no_reference = False
 _warned_no_reference_for_recognition = False
+
+
+def reference_available() -> bool:
+    """정답 획 사전 파일이 있는지 (없으면 글자 인식은 정답 글자를 썼다고 가정하고, 획 판정은 건너뛴다)."""
+    return composed_path().exists()
 
 
 def grade(req: GradeRequest) -> GradeResponse:
@@ -92,7 +98,7 @@ def _recognitions(req: GradeRequest) -> list[Recognition]:
     """칸마다 글자 인식 (recognize). 정답 획 사전이 없거나 그 칸 인식 중 오류면 정답 글자를 썼다고 가정한다."""
     global _warned_no_reference_for_recognition
     assumed = _assumed_recognitions(req)
-    if not reference.reference_available():
+    if not reference_available():
         if not _warned_no_reference_for_recognition:
             log.warning("정답 획 사전이 없어 글자 인식 대신 정답 글자를 썼다고 가정함")
             _warned_no_reference_for_recognition = True
@@ -151,7 +157,7 @@ def _check_strokes(req: GradeRequest, alignment: AlignmentResult) -> dict[int, S
     cells = [c for c in req.cells if needs_stroke_check(c, alignment)]
     if not cells:
         return {}
-    if not reference.reference_available():
+    if not reference_available():
         if not _warned_no_reference:
             log.warning("정답 획 사전이 없어 획순 판정을 건너뜀 (python -m app.core.stroke_vectorizer.compose --all)")
             _warned_no_reference = True

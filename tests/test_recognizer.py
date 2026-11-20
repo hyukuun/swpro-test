@@ -7,6 +7,7 @@
 import numpy as np
 import pytest
 
+from app import pipeline
 from app.core import reference
 from app.schemas import Canvas, Cell, Stroke
 from app.services.recognizer import CellKind, confusable_chars, recognize
@@ -14,7 +15,7 @@ from app.services.recognizer import CellKind, confusable_chars, recognize
 CANVAS = Canvas(w=300, h=200)  # 가로세로가 다른 칸에서도 0~1 정규화가 맞는지 보려고 일부러 다르게
 
 needs_data = pytest.mark.skipif(
-    not reference.reference_available(), reason="정답 획 사전 없음 (python -m app.core.stroke_vectorizer.compose --all)"
+    not pipeline.reference_available(), reason="정답 획 사전 없음 (python -m app.core.stroke_vectorizer.compose --all)"
 )
 
 

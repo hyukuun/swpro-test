@@ -47,7 +47,7 @@ def get_reference(char: str) -> ReferenceResponse:
     if not REFERENCE_CHAR.fullmatch(char):
         detail = ErrorDetail(field="char", message="한글 음절이나 자모 한 글자만 쓸 수 있어요")
         raise EngineError(ErrorCode.INVALID_REQUEST, "요청 값이 규칙에 맞지 않아요 (1개)", [detail])
-    if not reference.reference_available():
+    if not pipeline.reference_available():
         raise EngineError(ErrorCode.REFERENCE_UNAVAILABLE, "엔진에 정답 획 데이터가 없어요")
     if not reference.has_reference(char):
         raise EngineError(ErrorCode.NOT_FOUND, f"정답 획 데이터에 없는 글자예요: {char}")

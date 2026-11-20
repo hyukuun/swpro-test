@@ -118,7 +118,7 @@ def main() -> None:
     parser.add_argument("--points", type=int, default=64, help="가장 큰 요청의 획 하나당 점 개수 (기본 64)")
     args = parser.parse_args()
 
-    from app.core.reference import reference_available
+    from app.pipeline import reference_available
 
     if not reference_available():
         raise SystemExit(

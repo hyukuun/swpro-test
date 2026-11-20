@@ -66,8 +66,3 @@ def get_reference(char: str) -> list[ReferenceStroke]:
 def has_reference(char: str) -> bool:
     """정답 획 데이터가 있는 글자인지 (인식 후보를 고를 때 사용)."""
     return char in _table()
-
-
-def reference_available() -> bool:
-    """정답 획 사전 파일이 있는지 (없으면 서버는 획 판정을 건너뛴다)."""
-    return composed_path().exists()

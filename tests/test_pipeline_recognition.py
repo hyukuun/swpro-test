@@ -13,7 +13,7 @@ from app.services.recognizer import Candidate, CellKind, Recognition
 from tests.helpers import client, load_request
 
 needs_data = pytest.mark.skipif(
-    not reference.reference_available(), reason="정답 획 사전 없음 (python -m app.core.stroke_vectorizer.compose --all)"
+    not pipeline.reference_available(), reason="정답 획 사전 없음 (python -m app.core.stroke_vectorizer.compose --all)"
 )
 
 
@@ -29,7 +29,7 @@ def recorded(monkeypatch):
         candidates = [Candidate(char=expected[0], score=1.0)] if expected else []
         return Recognition(cell_index=cell.index, kind=CellKind.CHAR, candidates=candidates)
 
-    monkeypatch.setattr(reference, "reference_available", lambda: True)
+    monkeypatch.setattr(pipeline, "reference_available", lambda: True)
     monkeypatch.setattr(pipeline, "recognize", fake_recognize)
     monkeypatch.setattr(pipeline, "_check_strokes", lambda req, alignment: {})
     return calls
@@ -54,7 +54,7 @@ def test_advanced_passes_every_target_char(recorded):
 
 def test_without_reference_data_assumes_target_chars(monkeypatch, caplog):
     """사전이 없으면 recognize를 부르지 않고 정답 글자를 썼다고 가정한다 (경고는 한 번)."""
-    monkeypatch.setattr(reference, "reference_available", lambda: False)
+    monkeypatch.setattr(pipeline, "reference_available", lambda: False)
     monkeypatch.setattr(pipeline, "_warned_no_reference_for_recognition", False)
     monkeypatch.setattr(pipeline, "recognize", lambda *a: pytest.fail("사전이 없으면 recognize를 부르지 않음"))
     for _ in range(2):
