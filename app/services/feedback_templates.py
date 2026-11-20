@@ -39,6 +39,11 @@ _SEJONG = {
         ("글자는 다 맞았어요", "주황 상자에서 쓰는 순서를 다시 볼까요?"),
         ("All the letters are right", "Check the stroke order in the orange boxes."),
     ),
+    "balance": (
+        "encourage",
+        ("글자는 다 맞았어요", "글자 모양을 조금만 다듬어 볼까요?"),
+        ("All the letters are right", "Let's tidy up the letter shapes a little."),
+    ),
     "unchecked": (
         "praise",
         ("글자와 띄어쓰기는 다 맞았어요", "쓰는 순서는 이번에 확인하지 못했어요."),
@@ -56,10 +61,11 @@ def sejong_message(req: GradeRequest, result: AggregateResult) -> SejongMessage:
     """결과에 맞는 킹세종 말풍선 (칭찬·아쉬움·격려). LLM이 실패해도 항상 이 문장을 쓸 수 있다.
 
     표정(expression)은 결과로 정한다:
-    - 다 맞음 → praise
-    - 글자·띄어쓰기는 맞고 획순이 틀린 칸이 있음 → encourage
-    - 글자·띄어쓰기는 맞고 획순 오류는 없지만, 획 판정을 못 한 칸이 있음 → praise (확인 못 했다고 알림)
+    - 다 맞음 (perfect) → praise
     - 글자나 띄어쓰기가 틀림 → regret
+    - 글자·띄어쓰기는 맞고 획순이 틀린 칸(주황)이 있음 → encourage
+    - 글자·띄어쓰기·획순은 맞고 균형(글자 모양)만 통과하지 못한 칸이 있음 → encourage
+    - 다 맞았지만 획 판정을 못 한 칸이 있음 → praise (확인 못 했다고 알림)
     """
     if result.perfect:
         key = "perfect"
@@ -67,6 +73,8 @@ def sejong_message(req: GradeRequest, result: AggregateResult) -> SejongMessage:
         key = "wrong"
     elif any(c.mark == Mark.STROKE for c in result.cells):
         key = "stroke"
+    elif any(c.stroke_pass is False for c in result.cells):
+        key = "balance"
     else:
         key = "unchecked"
     expression, ko, en = _SEJONG[key]

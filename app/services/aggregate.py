@@ -14,8 +14,8 @@
   그 자리 양옆 어절을 모두 틀림으로. 더 쓴 글자는 바로 앞 어절(없으면 뒤 어절)을 틀림으로.
   획 오류는 어절 정답 여부에 넣지 않는다
 - correct: 글자 + 띄어쓰기 오류가 하나도 없음
-- perfect: correct이고, 획 판정을 해야 하는 칸을 모두 판정했고, 그중 mark가 stroke인 칸이 없음
-  (정답 획 데이터가 없어 획 판정을 못 한 칸이 있으면 perfect가 아님)
+- perfect: correct이고, 획 판정을 해야 하는 칸을 모두 판정했고, 그 칸들이 모두 통과(strokePass true)함.
+  균형(BALANCE)만 틀려도 통과가 아니다 (칸 색은 none이어도). 정답 획 데이터가 없어 판정을 못 한 칸이 있어도 아니다
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ def aggregate(
         alignment=items,
         words=_words(req.target, items),
         correct=correct,
-        perfect=correct and not stroke_cells and not unchecked,
+        perfect=correct and not unchecked and all(s.passed for s in strokes.values()),
         unchecked_cells=unchecked,
     )
 

@@ -117,7 +117,7 @@ tests/
 | --- | --- | --- |
 | `sessionId` | 요청의 `sessionId`를 그대로 돌려줌 | 스프링부트 로그 맞추기 |
 | `correct` | 글자 + 띄어쓰기가 모두 맞음 | 고수 결과(맞음/틀림), 쓰기 기록 |
-| `perfect` | `correct`이고 획순도 모두 맞음 | 쓰기 기록, 칭찬 |
+| `perfect` | `correct`이고, 맞게 쓴 한글 칸을 모두 획 판정했고 모두 통과(`strokePass: true`). 균형만 틀려도, 획 판정을 못 한 칸이 있어도 `false` | 쓰기 기록, 칭찬 |
 | `cells[]` | 칸마다의 결과 (요청 칸과 같은 순서) | 초보 결과 화면 |
 | `cells[].expected` / `recognized` | 이 칸의 정답 글자 / 학습자가 쓴 글자 | '이렇게 쓰셨어요' |
 | `cells[].mark` | 칸 표시: `none` 맞음, `char` 빨강(글자), `spacing` 빨강(띄어쓰기), `stroke` 주황(획순) | 상자 색 |

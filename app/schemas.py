@@ -405,7 +405,12 @@ class GradeResponse(CamelModel):
     engine_version: str
     stage: Stage
     correct: bool = Field(description="글자 + 띄어쓰기가 모두 맞음 (획 제외)")
-    perfect: bool = Field(description="correct이고 mark가 stroke인 칸도 없음.")
+    perfect: bool = Field(
+        description=(
+            "correct이고, 획 판정을 해야 하는 칸(맞게 쓴 한글 칸)을 모두 판정했고 모두 통과(strokePass true)함. "
+            "균형(BALANCE)만 틀려도, 획 판정을 못 한 칸이 있어도 false"
+        )
+    )
     cells: list[CellResult]
     alignment: list[AlignmentItem] = Field(default_factory=list)
     words: list[WordResult] = Field(default_factory=list)

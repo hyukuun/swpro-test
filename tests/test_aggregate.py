@@ -71,15 +71,16 @@ def test_cell_errors_never_hold_spacing_or_missing_char():
     assert [a.error for a in result.alignment if a.error] == ["MISSING_SPACE"]
 
 
-def test_balance_alone_does_not_mark_stroke():
-    """균형(BALANCE)만 틀리면 칸 색은 아직 none (디자인 확정 전)."""
+def test_balance_alone_blocks_perfect_but_not_color():
+    """균형(BALANCE)만 틀리면: 칸 색은 아직 none (디자인 확정 전), 하지만 strokePass가 false라 perfect도 아님."""
     req, _, recognitions, _ = _inputs("beginner")
     balance = CellError(type="BALANCE", metric="glyph_size", value=0.4, range=(0.5, 1.0))
     strokes = {0: StrokeCheckResult(passed=False, errors=[balance]), 1: StrokeCheckResult(passed=True)}
     alignment = spacing_align.align(req.target, req.stage, recognitions)
     result = aggregate(req, recognitions, alignment, strokes)
     assert result.cells[0].mark == "none" and result.cells[0].errors == [balance]
-    assert result.perfect is True
+    assert result.cells[0].stroke_pass is False
+    assert (result.correct, result.perfect) == (True, False)
 
 
 # ---------------------------------------------------------------- 경우별 (인식 결과를 직접 만들어 넣음)

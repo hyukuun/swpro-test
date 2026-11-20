@@ -80,3 +80,27 @@ def test_punctuation_cell_is_not_stroke_checked(monkeypatch):
     monkeypatch.setattr(stroke_checker, "check_strokes", fake_check)
     client.post("/grade", json=load_request("advanced"))
     assert "?" not in seen and seen == ["나", "너", "좋", "아", "하", "냐"]
+
+
+def test_balance_only_is_not_perfect_and_says_so(monkeypatch):
+    """'다'의 균형(글자 모양)만 틀림 → 칸 색은 없음, perfect 아님, 말풍선은 모양을 다듬자고 함."""
+
+    def fake_check(target, canvas, strokes):
+        if target == "다":
+            balance = CellError(type="BALANCE", metric="glyph_size", value=0.4, range=(0.5, 1.0))
+            return StrokeCheckResult(passed=False, errors=[balance])
+        return StrokeCheckResult(passed=True)
+
+    monkeypatch.setattr(stroke_checker, "check_strokes", fake_check)
+    body = client.post("/grade", json=load_request("beginner")).json()
+    assert body["correct"] is True and body["perfect"] is False
+    assert [c["mark"] for c in body["cells"]] == ["none", "none"]
+    assert [c["strokePass"] for c in body["cells"]] == [True, False]
+    assert body["sejong"]["expression"] == "encourage"
+    assert body["sejong"]["subText"] == "글자 모양을 조금만 다듬어 볼까요?"
+
+
+def test_all_stroke_checks_pass_is_perfect(monkeypatch):
+    monkeypatch.setattr(stroke_checker, "check_strokes", lambda *a: StrokeCheckResult(passed=True))
+    body = client.post("/grade", json=load_request("beginner")).json()
+    assert body["perfect"] is True and body["sejong"]["expression"] == "praise"
