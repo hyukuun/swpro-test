@@ -12,7 +12,7 @@ FE (iPad Safari) → Spring Boot → 교정엔진 (FastAPI)
 app/
 ├── main.py                    # FastAPI 엔드포인트 (스프링부트와 통신)
 ├── config.py                  # 환경변수 설정
-├── errors.py                  # 오류 응답 (400·422·404·405·500을 한 가지 모양으로)
+├── errors.py                  # 오류 응답 (400·422·404·405·500·503을 한 가지 모양으로)
 ├── schemas.py                 # 요청/응답 모델
 ├── pipeline.py                # 인식 → 정렬 → 획순 → 결과 종합 흐름
 ├── core/
@@ -104,9 +104,10 @@ tests/
 | --- | --- | --- | --- |
 | 400 | `INVALID_JSON` | 본문이 JSON이 아님 | 보내는 코드 버그. 다시 보내도 같음 |
 | 422 | `INVALID_REQUEST` | 위 요청 검사 규칙을 어김. `details`에 틀린 값 위치(`field`)와 이유 | 보내는 값 확인. 다시 보내도 같음 |
-| 404 | `NOT_FOUND` | 없는 주소 | 주소 확인 |
+| 404 | `NOT_FOUND` | 없는 주소, 정답 획 데이터에 없는 글자(`/reference`) | 주소·글자 확인 |
 | 405 | `METHOD_NOT_ALLOWED` | GET/POST가 다름 | 방식 확인 |
 | 500 | `INTERNAL_ERROR` | 엔진 내부 오류 (내용은 엔진 로그에만 남김) | 잠시 뒤 다시 시도할 수 있음 |
+| 503 | `REFERENCE_UNAVAILABLE` | 엔진에 정답 획 사전이 없음 (`/reference`, 엔진 설치 문제) | 엔진 담당에게 알림 |
 
 - `field`는 요청 JSON 기준 위치 (`cells[0].strokes[1].points`). 요청 전체에 걸친 규칙이면 `null`
 - 형식: `app/schemas.py`의 `ErrorResponse`, JSON Schema: `docs/schema/error_response.schema.json`, 처리 코드: `app/errors.py`
@@ -219,6 +220,7 @@ python -m scripts.hand_writing_confirm                  # 필기 테스트 → h
 | 주소 | 설명 |
 |---|---|
 | `POST /grade` | 판정 요청 → 판정 결과. 띄어쓰기·획순 판정은 진짜, **글자 인식은 아직 임시**(정답 글자를 썼다고 가정), 설명 문장(`explanations`)은 아직 빈 목록 (`engineVersion`이 `-stub`으로 끝남) |
+| `GET /reference/{글자}` | 글자 하나의 정답 획 (초보 회색 가이드, 정답 리플레이). 글자는 URL 인코딩 (`가` → `%EA%B0%80`). 한글 음절·자모 한 글자가 아니면 422, 사전에 없는 글자 404, 엔진에 사전이 없으면 503. 정답 획은 `engineVersion`이 바뀔 때만 바뀌어 캐시해도 됨 |
 | `GET /health` | 살아 있는지 확인. `{"status": "ok", "engineVersion": "0.1.0-stub"}` — `-stub`이면 글자 인식 등 일부가 아직 임시 |
 | `GET /docs` | 필드 설명을 브라우저에서 보고 직접 호출해 볼 수 있음 |
 

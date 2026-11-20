@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "ReferenceStroke": {
+      "description": "정답 획 하나 (정진 명세 5번 compose() 출력과 같은 모양).",
+      "properties": {
+        "order": {
+          "description": "글자 전체 기준 획 번호, 1부터 = 쓰는 순서",
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "jamo": {
+          "title": "Jamo",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "strokeNo": {
+          "description": "그 자모 안에서 몇 번째 획, 1부터",
+          "minimum": 1,
+          "title": "Strokeno",
+          "type": "integer"
+        },
+        "points": {
+          "description": "획 중심선 [x, y] 0~1, 쓰는 방향 순서",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "획 설명 (예: '위 가로획을 왼쪽에서 오른쪽으로')",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "order",
+        "jamo",
+        "role",
+        "strokeNo",
+        "points"
+      ],
+      "title": "ReferenceStroke",
+      "type": "object"
+    },
+    "Role": {
+      "description": "자모의 자리. 정답 데이터와 엔진 출력 모두 영어로 통일.",
+      "enum": [
+        "cho",
+        "jung",
+        "jong"
+      ],
+      "title": "Role",
+      "type": "string"
+    }
+  },
+  "description": "글자 하나의 정답 획 (초보 회색 가이드, 정답 리플레이). 정답 획은 엔진 버전이 바뀔 때만 바뀌어 캐시해도 된다.",
+  "properties": {
+    "char": {
+      "description": "요청한 글자 (한글 음절 또는 자모 하나)",
+      "title": "Char",
+      "type": "string"
+    },
+    "strokes": {
+      "description": "쓰는 순서대로. 칸에 그릴 때 x * 칸너비, y * 칸높이",
+      "items": {
+        "$ref": "#/$defs/ReferenceStroke"
+      },
+      "title": "Strokes",
+      "type": "array"
+    },
+    "engineVersion": {
+      "title": "Engineversion",
+      "type": "string"
+    }
+  },
+  "required": [
+    "char",
+    "strokes",
+    "engineVersion"
+  ],
+  "title": "ReferenceResponse",
+  "type": "object"
+}

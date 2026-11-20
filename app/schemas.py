@@ -429,9 +429,10 @@ class ErrorCode(str, Enum):
 
     INVALID_JSON = "INVALID_JSON"  # 400: 본문이 JSON이 아님 (괄호·따옴표 등 문법 오류)
     INVALID_REQUEST = "INVALID_REQUEST"  # 422: JSON은 맞지만 요청 검사 규칙을 어김
-    NOT_FOUND = "NOT_FOUND"  # 404: 없는 주소
+    NOT_FOUND = "NOT_FOUND"  # 404: 없는 주소, 정답 획 데이터에 없는 글자 (/reference)
     METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED"  # 405: 주소는 있는데 GET/POST가 다름
     INTERNAL_ERROR = "INTERNAL_ERROR"  # 500: 엔진 내부 오류 (다시 시도해 볼 수 있음)
+    REFERENCE_UNAVAILABLE = "REFERENCE_UNAVAILABLE"  # 503: 엔진에 정답 획 사전이 없음 (/reference, 엔진 설치 문제)
 
 
 class ErrorDetail(CamelModel):
@@ -453,7 +454,7 @@ class ErrorResponse(CamelModel):
 
 
 # =====================================================================
-# 정답 획 데이터 (엔진 안쪽: core/reference.py가 돌려주는 모양)
+# 정답 획: GET /reference/{글자} (core/reference.py가 돌려주는 모양 그대로)
 # =====================================================================
 
 
@@ -466,6 +467,14 @@ class ReferenceStroke(CamelModel):
     stroke_no: int = Field(ge=1, description="그 자모 안에서 몇 번째 획, 1부터")
     points: list[tuple[float, float]] = Field(description="획 중심선 [x, y] 0~1, 쓰는 방향 순서")
     description: str | None = Field(default=None, description="획 설명 (예: '위 가로획을 왼쪽에서 오른쪽으로')")
+
+
+class ReferenceResponse(CamelModel):
+    """글자 하나의 정답 획 (초보 회색 가이드, 정답 리플레이). 정답 획은 엔진 버전이 바뀔 때만 바뀌어 캐시해도 된다."""
+
+    char: str = Field(description="요청한 글자 (한글 음절 또는 자모 하나)")
+    strokes: list[ReferenceStroke] = Field(description="쓰는 순서대로. 칸에 그릴 때 x * 칸너비, y * 칸높이")
+    engine_version: str
 
 
 # =====================================================================

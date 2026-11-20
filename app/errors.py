@@ -9,8 +9,10 @@
 | 없는 주소                    | 404  | NOT_FOUND          |
 | GET/POST가 다름              | 405  | METHOD_NOT_ALLOWED |
 | 그 밖의 엔진 내부 오류       | 500  | INTERNAL_ERROR     |
+| 정답 획 사전이 없음          | 503  | REFERENCE_UNAVAILABLE |
 
 500은 내부 내용(파일 경로, 오류 원문)을 응답에 넣지 않고 서버 로그에만 남긴다.
+주소 함수 안에서 오류를 돌려줄 때는 EngineError를 raise한다 (예: /reference의 없는 글자).
 """
 
 from __future__ import annotations
@@ -33,7 +35,16 @@ STATUS_OF = {
     ErrorCode.NOT_FOUND: 404,
     ErrorCode.METHOD_NOT_ALLOWED: 405,
     ErrorCode.INTERNAL_ERROR: 500,
+    ErrorCode.REFERENCE_UNAVAILABLE: 503,
 }
+
+
+class EngineError(Exception):
+    """주소 함수 안에서 정해진 오류 응답을 돌려줄 때 쓴다. raise EngineError(ErrorCode.NOT_FOUND, '...')"""
+
+    def __init__(self, code: ErrorCode, message: str, details: list[ErrorDetail] | None = None) -> None:
+        super().__init__(message)
+        self.code, self.message, self.details = code, message, details or []
 
 
 def error_response(code: ErrorCode, message: str, details: list[ErrorDetail] | None = None) -> JSONResponse:
@@ -79,6 +90,11 @@ async def _on_http_error(_: Request, exc: Exception) -> JSONResponse:
     return error_response(ErrorCode.INTERNAL_ERROR, "요청을 처리하지 못했어요")
 
 
+async def _on_engine_error(_: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, EngineError)
+    return error_response(exc.code, exc.message, exc.details)
+
+
 async def _on_unexpected_error(_: Request, exc: Exception) -> JSONResponse:
     log.exception("엔진 내부 오류", exc_info=exc)
     return error_response(ErrorCode.INTERNAL_ERROR, "엔진 내부 오류가 났어요. 잠시 뒤 다시 시도해 주세요")
@@ -88,4 +104,5 @@ def register(app: FastAPI) -> None:
     """main.py에서 한 번 부른다."""
     app.add_exception_handler(RequestValidationError, _on_validation_error)
     app.add_exception_handler(StarletteHTTPException, _on_http_error)
+    app.add_exception_handler(EngineError, _on_engine_error)
     app.add_exception_handler(Exception, _on_unexpected_error)

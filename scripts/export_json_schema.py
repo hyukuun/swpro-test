@@ -1,7 +1,7 @@
 """스키마를 JSON Schema 파일로 내보낸다. 백엔드는 이 파일을 보고 자바 DTO를 만든다.
 
 실행: python -m scripts.export_json_schema
-결과: docs/schema/grade_request·grade_response·error_response·health_response.schema.json
+결과: docs/schema/grade_request·grade_response·error_response·health_response·reference_response.schema.json
 
 schemas.py를 고치면 다시 실행해서 파일도 같이 커밋한다. (tests/test_grade.py가 최신인지 검사한다)
 """
@@ -9,7 +9,7 @@ schemas.py를 고치면 다시 실행해서 파일도 같이 커밋한다. (test
 import json
 from pathlib import Path
 
-from app.schemas import ErrorResponse, GradeRequest, GradeResponse, HealthResponse
+from app.schemas import ErrorResponse, GradeRequest, GradeResponse, HealthResponse, ReferenceResponse
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "schema"
 MODELS = {
@@ -17,6 +17,7 @@ MODELS = {
     "grade_response": GradeResponse,
     "error_response": ErrorResponse,
     "health_response": HealthResponse,
+    "reference_response": ReferenceResponse,
 }
 
 

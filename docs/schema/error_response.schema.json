@@ -7,7 +7,8 @@
         "INVALID_REQUEST",
         "NOT_FOUND",
         "METHOD_NOT_ALLOWED",
-        "INTERNAL_ERROR"
+        "INTERNAL_ERROR",
+        "REFERENCE_UNAVAILABLE"
       ],
       "title": "ErrorCode",
       "type": "string"
