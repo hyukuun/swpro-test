@@ -218,15 +218,15 @@ python -m scripts.hand_writing_confirm                  # 필기 테스트 → h
 
 | 주소 | 설명 |
 |---|---|
-| `POST /grade` | 판정 요청 → 판정 결과. **지금은 형식만 맞춘 임시 응답** (`engineVersion`이 `-stub`으로 끝남) |
-| `GET /health` | 살아 있는지 확인. `{"status": "ok", "engineVersion": "0.1.0-stub"}` — `-stub`이면 임시 응답 중 |
+| `POST /grade` | 판정 요청 → 판정 결과. 띄어쓰기·획순 판정은 진짜, **글자 인식은 아직 임시**(정답 글자를 썼다고 가정), 설명 문장(`explanations`)은 아직 빈 목록 (`engineVersion`이 `-stub`으로 끝남) |
+| `GET /health` | 살아 있는지 확인. `{"status": "ok", "engineVersion": "0.1.0-stub"}` — `-stub`이면 글자 인식 등 일부가 아직 임시 |
 | `GET /docs` | 필드 설명을 브라우저에서 보고 직접 호출해 볼 수 있음 |
 
 - 형식 정의: `app/schemas.py`
 - 백엔드용 JSON Schema: `docs/schema/*.schema.json` (`python -m scripts.export_json_schema`로 다시 만듦)
 - 피그마 장면별 예시: `tests/fixtures/grade_request_*.json`, `grade_response_*.json`
   - `beginner` 바다 (다 획순 틀림) / `intermediate` 보고 싶었어 (싶→십) / `advanced` 나 너 좋아하냐? (나너 붙여 씀)
-  - 응답 예시는 진짜 판정이 나올 모양이다. 지금 `/grade`는 형식만 맞춘 임시 응답(모든 칸 맞음)을 돌려준다
+  - 응답 예시는 진짜 판정이 나올 모양이다. 지금 `/grade`는 글자 인식이 임시라 "다른 글자를 썼어요"는 아직 나오지 않는다. 정답 획 데이터가 없으면 획순 판정은 건너뛴다 (`strokePass: null`)
 - 잘못된 요청은 422 (규칙은 위 '요청 검사 규칙' 표)
 
 다른 컴퓨터(백엔드)에서 호출하려면 `--host 0.0.0.0`으로 띄운다:

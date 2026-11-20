@@ -4,7 +4,7 @@
 - GET  /health : 살아 있는지 + engineVersion
 - 필드 설명은 서버를 띄운 뒤 /docs 에서 볼 수 있다.
 
-지금 /grade는 형식만 맞춘 임시 응답이다 (app/pipeline.py 참고).
+지금 /grade는 띄어쓰기·획순 판정은 진짜, 글자 인식은 임시다 (app/pipeline.py 참고).
 """
 
 from fastapi import FastAPI
@@ -19,7 +19,7 @@ errors.register(app)  # 오류는 모두 ErrorResponse 모양으로 (app/errors.
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    """살아 있는지 확인. engineVersion이 '-stub'으로 끝나면 임시 응답 중이다."""
+    """살아 있는지 확인. engineVersion이 '-stub'으로 끝나면 글자 인식 등 일부가 아직 임시다."""
     return HealthResponse(engine_version=ENGINE_VERSION)
 
 

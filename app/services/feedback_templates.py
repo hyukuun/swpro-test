@@ -27,6 +27,32 @@ def explanations(req: GradeRequest, result: AggregateResult) -> list[Explanation
     raise NotImplementedError
 
 
+_SEJONG = {
+    # 상황: (표정, 한국어 (첫 줄, 둘째 줄), 영어 (첫 줄, 둘째 줄))
+    "perfect": (
+        "praise",
+        ("참 잘했어요!", "글자도 띄어쓰기도 쓰는 순서도 다 맞았어요."),
+        ("Well done!", "Letters, spacing and stroke order are all correct."),
+    ),
+    "stroke": (
+        "encourage",
+        ("글자는 다 맞았어요", "주황 상자에서 쓰는 순서를 다시 볼까요?"),
+        ("All the letters are right", "Check the stroke order in the orange boxes."),
+    ),
+    "wrong": (
+        "regret",
+        ("아쉬워요, 다른 곳이 있어요", "빨간 상자를 다시 볼까요?"),
+        ("So close!", "Take another look at the red boxes."),
+    ),
+}
+
+
 def sejong_message(req: GradeRequest, result: AggregateResult) -> SejongMessage:
-    """결과에 맞는 킹세종 말풍선 (칭찬·아쉬움·격려). LLM이 실패해도 항상 이 문장을 쓸 수 있다."""
-    raise NotImplementedError
+    """결과에 맞는 킹세종 말풍선 (칭찬·아쉬움·격려). LLM이 실패해도 항상 이 문장을 쓸 수 있다.
+
+    표정(expression)은 결과로 정한다: 다 맞음 → praise / 글자·띄어쓰기는 맞고 획순만 틀림 → encourage / 그 밖 → regret
+    """
+    key = "perfect" if result.perfect else ("stroke" if result.correct else "wrong")
+    expression, ko, en = _SEJONG[key]
+    text, sub_text = en if req.locale == "en" else ko
+    return SejongMessage(text=text, sub_text=sub_text, expression=expression, source="template")

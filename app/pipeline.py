@@ -1,83 +1,99 @@
 """[혁윤] 인식 → 정렬 → 획순 → 결과 종합 흐름 제어.
 
-지금은 **형식만 맞춘 임시 응답**이다. 스프링부트·프론트가 연동을 먼저 시작할 수 있도록
-GradeResponse 모양만 지키고, 판정은 하지 않는다 (모든 칸 맞음).
-
-진짜 흐름 (README '입력과 출력 한눈에 보기' 2번):
-    1. recognizer      (D-01, 혁윤)  칸마다 무슨 글자를 썼나
-    2. spacing_align   (D-02, 혁윤)  정답과 줄 맞춤 → alignment, 띄어쓰기 오류
-    3. stroke_checker  (D-04, 정진)  글자가 맞은 칸만 획순·균형 판정
+흐름 (README '입력과 출력 한눈에 보기' 2번):
+    1. recognizer      (D-01, 혁윤)  칸마다 무슨 글자를 썼나        ← 지금은 임시 인식 (아래)
+    2. spacing_align   (D-02, 혁윤)  정답과 줄 맞춤 → alignment, 글자·띄어쓰기 오류
+    3. stroke_checker  (D-04, 정진)  글자가 맞은 한글 칸만 획순·균형 판정
     4. aggregate       (D-03, 혁윤)  mark, words, correct, perfect
-    5. feedback        (E-03·E-07, 혁윤) explanations, sejong
+    5. feedback        (E-03·E-07, 혁윤) sejong (설명 문장 explanations는 아직 [])
+
+임시 인식: 진짜 글자 인식(recognize) 전까지 "정답 글자를 썼다"고 가정한다.
+그래서 다른 글자를 쓴 경우는 아직 잡지 못하지만, 띄어쓰기 판정과 획순 판정은 진짜로 나온다.
+
+정답 획 데이터(composed_all.json)가 없으면 획 판정을 건너뛴다 (strokePass: null). 로그에 한 번 경고한다.
+TODO(혁윤): 임시 인식을 recognizer.recognize로 바꾸고, explanations를 채운다
 """
 
 from __future__ import annotations
 
+import logging
+import re
+
 from app.config import ENGINE_VERSION
-from app.schemas import (
-    AlignmentItem,
-    CellResult,
-    GradeRequest,
-    GradeResponse,
-    SejongMessage,
-    Stage,
-    WordResult,
-)
+from app.schemas import GradeRequest, GradeResponse, Stage
+from app.services import feedback_templates, spacing_align, stroke_checker
+from app.services.aggregate import aggregate
+from app.services.recognizer import Candidate, CellKind, Recognition
+from app.services.spacing_align import AlignmentResult
+from app.services.stroke_checker import StrokeCheckResult
+
+log = logging.getLogger(__name__)
+
+HANGUL = re.compile(r"[가-힣ㄱ-ㅣ]")  # 획 판정을 하는 글자: 한글 음절·자모 (문장부호는 하지 않음)
+_warned_no_reference = False
 
 
 def grade(req: GradeRequest) -> GradeResponse:
-    """판정 요청 하나를 받아 결과를 돌려준다. (지금은 형식만 맞춘 임시 응답: 모든 칸 맞음)"""
-    slots = _slots(req)
-    cell_of_target = dict(slots)
-    target_of_cell = {c: t for t, c in slots if c is not None}
-
-    cells = []
-    for cell in req.cells:
-        t_idx = target_of_cell.get(cell.index)
-        expected = req.target[t_idx] if t_idx is not None else None
-        cells.append(
-            CellResult(
-                index=cell.index,
-                expected=expected,
-                recognized=expected if cell.strokes else " ",
-                char_correct=True,
-            )
-        )
-
-    words = []
-    start = 0
-    for text in req.target.split(" "):
-        indexes = [cell_of_target[i] for i in range(start, start + len(text)) if cell_of_target[i] is not None]
-        words.append(WordResult(text=text, cell_indexes=indexes, correct=True))
-        start += len(text) + 1
-
+    """판정 요청 하나를 받아 결과를 돌려준다."""
+    recognitions = _temporary_recognitions(req)
+    alignment = spacing_align.align(req.target, req.stage, recognitions)
+    strokes = _check_strokes(req, alignment)
+    result = aggregate(req, recognitions, alignment, strokes)
     return GradeResponse(
         session_id=req.session_id,
         engine_version=ENGINE_VERSION,
         stage=req.stage,
-        correct=True,
-        perfect=True,
-        cells=cells,
-        alignment=[AlignmentItem(target_index=t, target_char=req.target[t], cell_index=c) for t, c in slots],
-        words=words,
-        sejong=SejongMessage(text="임시 응답이에요", expression="default"),
+        correct=result.correct,
+        perfect=result.perfect,
+        cells=result.cells,
+        alignment=result.alignment,
+        words=result.words,
+        explanations=[],
+        sejong=feedback_templates.sejong_message(req, result),
     )
 
 
-def _slots(req: GradeRequest) -> list[tuple[int, int | None]]:
-    """정답 문장의 각 자리(공백 포함) ↔ 칸 번호. 단계별 칸 규칙(schemas.Stage)대로 그대로 맞춘다.
+def _temporary_recognitions(req: GradeRequest) -> list[Recognition]:
+    """임시 인식: 획이 있는 칸은 그 자리의 정답 글자를 썼다고 본다 (확신도 1).
 
-    - 초보·중수: 공백을 뺀 글자와 칸이 1:1, 공백 자리는 칸이 없다 (None)
-    - 고수: 정답 i번째 자리 ↔ i번째 칸 (빈 칸 = 띄어쓰기), 남는 뒤쪽 칸은 대응 없음
+    - 초보·중수: 칸 i의 정답 = 공백을 뺀 정답의 i번째 글자
+    - 고수: 칸이 밀릴 수 있으므로, k번째로 글자를 쓴 칸 = 공백을 뺀 정답의 k번째 글자
+    정답 글자가 남지 않은 칸(더 쓴 칸)은 후보 없는 글자 칸으로 둔다.
     """
-    if req.stage == Stage.ADVANCED:
-        return [(t, t if t < len(req.cells) else None) for t in range(len(req.target))]
-    slots: list[tuple[int, int | None]] = []
-    c_idx = 0
-    for t, ch in enumerate(req.target):
-        if ch == " ":
-            slots.append((t, None))
-        else:
-            slots.append((t, c_idx))
-            c_idx += 1
-    return slots
+    chars = [ch for ch in req.target if ch != " "]
+    out: list[Recognition] = []
+    k = 0
+    for cell in req.cells:
+        if not cell.strokes:
+            out.append(Recognition(cell_index=cell.index, kind=CellKind.EMPTY, candidates=[]))
+            continue
+        pos = k if req.stage == Stage.ADVANCED else cell.index
+        k += 1
+        guess = chars[pos] if pos < len(chars) else None
+        candidates = [Candidate(char=guess, score=1.0)] if guess else []
+        out.append(Recognition(cell_index=cell.index, kind=CellKind.CHAR, candidates=candidates))
+    return out
+
+
+def _check_strokes(req: GradeRequest, alignment: AlignmentResult) -> dict[int, StrokeCheckResult]:
+    """글자를 맞게 쓴 한글 칸만 획순·균형 판정. 정답 획 데이터가 없거나 사전에 없는 글자면 건너뛴다."""
+    global _warned_no_reference
+    results: dict[int, StrokeCheckResult] = {}
+    for cell in req.cells:
+        expected = alignment.expected.get(cell.index)
+        if not cell.strokes or not expected or not HANGUL.fullmatch(expected):
+            continue
+        if not alignment.char_correct.get(cell.index, False):
+            continue
+        try:
+            results[cell.index] = stroke_checker.check_strokes(expected, req.canvas, cell.strokes)
+        except FileNotFoundError:
+            if not _warned_no_reference:
+                log.warning(
+                    "정답 획 데이터가 없어 획순 판정을 건너뜀 (python -m app.core.stroke_vectorizer.compose --all)"
+                )
+                _warned_no_reference = True
+            return {}
+        except KeyError:
+            log.warning("정답 획 데이터에 없는 글자라 획순 판정을 건너뜀: %s", expected)
+    return results

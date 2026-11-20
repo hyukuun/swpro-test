@@ -5,7 +5,7 @@
 - 예시 응답 JSON이 형식에 맞는지
 - docs/schema 파일이 schemas.py와 같은지 (고치고 다시 내보내기를 잊지 않게)
 
-판정 결과의 내용(어느 칸이 틀렸는지)은 판정 로직을 넣을 때 테스트한다. 지금 /grade는 형식만 맞춘 임시 응답이다.
+판정 결과의 내용은 tests/test_aggregate.py(결과 묶기)와 tests/test_pipeline.py(판정 흐름)에서 확인한다.
 """
 
 import pytest
