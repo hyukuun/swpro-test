@@ -8,7 +8,7 @@ from app.schemas import CellError, GradeRequest, GradeResponse, Locale, Stage
 from app.services import feedback_templates, spacing_align
 from app.services.aggregate import aggregate
 from app.services.recognizer import Candidate, CellKind, Recognition
-from tests.helpers import STAGES, client, load_fixture, load_request
+from tests.helpers import STAGES, assume_target_written, client, load_fixture, load_request
 from tests.test_aggregate import _inputs
 
 
@@ -168,6 +168,7 @@ def _grade_with_llm(monkeypatch, answer, key="test-key"):
         return answer
 
     fake_ask.prompt = None
+    assume_target_written(monkeypatch)  # 예시 획은 가짜라 글자 인식은 정답 글자를 썼다고 가정
     monkeypatch.setattr(config, "GEMINI_API_KEY", key)
     monkeypatch.setattr(llm_feedback, "_ask", fake_ask)
     r = client.post("/grade", json=load_request("advanced"))
@@ -219,6 +220,7 @@ def test_no_mistakes_to_explain_uses_template_without_llm(monkeypatch):
     from app.services import llm_feedback
 
     monkeypatch.setattr(config, "GEMINI_API_KEY", "test-key")
+    assume_target_written(monkeypatch)  # 예시 획은 가짜라 글자 인식은 정답 글자를 썼다고 가정
     monkeypatch.setattr(pipeline, "_check_strokes", lambda req, alignment: {})  # 예시 획은 가짜라 획순 판정은 뺀다
     monkeypatch.setattr(llm_feedback, "_ask", lambda prompt: pytest.fail("다 맞으면 LLM을 부르지 않음"))
     body = client.post("/grade", json=data).json()

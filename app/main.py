@@ -5,7 +5,8 @@
 - GET  /health           : 살아 있는지 + engineVersion
 - 필드 설명은 서버를 띄운 뒤 /docs 에서 볼 수 있다.
 
-지금 /grade는 띄어쓰기·획순 판정은 진짜, 글자 인식은 임시다 (app/pipeline.py 참고).
+/grade는 글자 인식·띄어쓰기·획순 판정이 모두 진짜다. 정답 획 데이터가 없을 때만 글자 인식 대신
+정답 글자를 썼다고 가정하고 획순 판정은 건너뛴다 (app/pipeline.py 참고).
 """
 
 import re

@@ -1,5 +1,7 @@
-"""판정 흐름(/grade): 임시 인식으로도 띄어쓰기·획순 판정이 진짜로 나오는지.
+"""판정 흐름(/grade): 띄어쓰기·획순 판정과 결과 묶기가 응답까지 이어지는지.
 
+예시 요청의 획은 가짜라서 글자 인식은 '정답 글자를 썼다'고 가정한다 (assume_target_written).
+글자 인식 연결은 tests/test_pipeline_recognition.py에서 확인한다.
 획순 판정은 정답 획 데이터가 필요해서, 여기서는 정답 획 사전(reference)과 stroke_checker.check_strokes를
 바꿔 끼워 흐름만 확인한다. 기본은 '사전 파일이 있고 모든 글자가 사전에 있음'.
 """
@@ -10,11 +12,12 @@ from app.core import reference
 from app.schemas import CellError, StrokeMapItem
 from app.services import stroke_checker
 from app.services.stroke_checker import StrokeCheckResult
-from tests.helpers import client, load_request
+from tests.helpers import assume_target_written, client, load_request
 
 
 @pytest.fixture(autouse=True)
 def fake_reference(monkeypatch):
+    assume_target_written(monkeypatch)
     monkeypatch.setattr(reference, "reference_available", lambda: True)
     monkeypatch.setattr(reference, "has_reference", lambda char: True)
 
