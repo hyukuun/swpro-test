@@ -10,14 +10,18 @@
 - 칸 mark: 글자 오류 → char(빨강) / 띄어쓰기 오류 → spacing(빨강) / 획 오류 → stroke(주황) / 맞음 → none
 - ORDER·DIRECTION·MISSING·EXTRA는 stroke로 묶는다. BALANCE는 아직 none (디자인 확정 전)
 - 오류 위치: 칸 errors엔 글자 오류(CHAR_MISMATCH, EXTRA_CHAR)와 획 오류만. 띄어쓰기·빠뜨린 글자는 alignment에만
-- 어절: 그 어절 자리에 글자 오류가 있거나, 어절 옆 띄어쓰기 자리에 오류가 있으면(양옆 어절 모두) 틀림.
+- 어절: 그 어절 자리에 글자 오류가 있으면 틀림. 띄어쓰기 오류(누락·추가·두 칸)는 종류와 상관없이
+  그 자리 양옆 어절을 모두 틀림으로. 더 쓴 글자는 바로 앞 어절(없으면 뒤 어절)을 틀림으로.
   획 오류는 어절 정답 여부에 넣지 않는다
-- correct: 글자 + 띄어쓰기 오류가 하나도 없음 / perfect: correct이고 mark가 stroke인 칸도 없음
+- correct: 글자 + 띄어쓰기 오류가 하나도 없음
+- perfect: correct이고, 획 판정을 해야 하는 칸을 모두 판정했고, 그중 mark가 stroke인 칸이 없음
+  (정답 획 데이터가 없어 획 판정을 못 한 칸이 있으면 perfect가 아님)
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 
 from app.schemas import (
     CELL_ERROR_TYPES,
@@ -37,6 +41,18 @@ from app.services.stroke_checker import StrokeCheckResult
 CHAR_ERRORS = frozenset({ErrorType.CHAR_MISMATCH, ErrorType.EXTRA_CHAR, ErrorType.MISSING_CHAR})
 SPACING_ERRORS = frozenset({ErrorType.MISSING_SPACE, ErrorType.EXTRA_SPACE, ErrorType.DOUBLE_SPACE})
 STROKE_MARK_ERRORS = frozenset({ErrorType.ORDER, ErrorType.DIRECTION, ErrorType.MISSING, ErrorType.EXTRA})
+HANGUL = re.compile(r"[가-힣ㄱ-ㅣ]")  # 획 판정을 하는 글자: 한글 음절·자모 (문장부호는 하지 않음)
+
+
+def needs_stroke_check(cell: Cell, alignment: AlignmentResult) -> bool:
+    """획 판정을 해야 하는 칸인지: 획이 있고, 한글 정답 글자를 맞게 쓴 칸."""
+    expected = alignment.expected.get(cell.index)
+    return (
+        bool(cell.strokes)
+        and expected is not None
+        and HANGUL.fullmatch(expected) is not None
+        and alignment.char_correct.get(cell.index, False)
+    )
 
 
 @dataclass(frozen=True)
@@ -48,6 +64,8 @@ class AggregateResult:
     words: list[WordResult]  # 정답 문장의 어절마다 하나 (중수 빨간 상자)
     correct: bool
     perfect: bool
+    # 획 판정을 해야 했지만 하지 못한 칸 (정답 획 데이터가 없거나 사전에 없는 글자)
+    unchecked_cells: list[int] = field(default_factory=list)
 
 
 def aggregate(
@@ -70,12 +88,14 @@ def aggregate(
     ]
     items = [item.model_copy(update={"mark": _item_mark(item, stroke_cells)}) for item in alignment.items]
     correct = all(item.error is None for item in items)
+    unchecked = [c.index for c in req.cells if needs_stroke_check(c, alignment) and c.index not in strokes]
     return AggregateResult(
         cells=cells,
         alignment=items,
         words=_words(req.target, items),
         correct=correct,
-        perfect=correct and not stroke_cells,
+        perfect=correct and not stroke_cells and not unchecked,
+        unchecked_cells=unchecked,
     )
 
 
@@ -133,22 +153,41 @@ def _words(target: str, items: list[AlignmentItem]) -> list[WordResult]:
             word_of[pos + k] = w
         pos += len(text) + 1
 
+    # 줄 맞춤 항목마다 바로 앞·뒤 글자 자리의 어절 (띄어쓰기 자리·더 쓴 칸의 양옆을 찾기 위해)
+    word_at: list[int | None] = [
+        word_of.get(item.target_index) if item.target_index is not None else None for item in items
+    ]
+    prev_word = _nearest(word_at)  # 각 항목 바로 앞 글자 자리의 어절
+    next_word = _nearest(word_at[::-1])[::-1]  # 각 항목 바로 뒤 글자 자리의 어절
+
     cells: list[list[int]] = [[] for _ in texts]
     wrong = [False] * len(texts)
-    current = 0  # 지금까지 지나온 마지막 어절
-    for item in items:
-        t = item.target_index
-        if t is not None and t in word_of:  # 글자 자리
-            current = word_of[t]
+
+    def mark_wrong(word: int | None) -> None:
+        if word is not None:
+            wrong[word] = True
+
+    for k, item in enumerate(items):
+        here = word_at[k]
+        if here is not None:  # 글자 자리
             if item.cell_index is not None:
-                cells[current].append(item.cell_index)
+                cells[here].append(item.cell_index)
             if item.error is not None:
-                wrong[current] = True
-        elif t is not None:  # 띄어쓰기 자리: 오류면 양옆 어절 모두 틀림
-            if item.error is not None:
-                wrong[current] = True
-                if current + 1 < len(texts):
-                    wrong[current + 1] = True
-        elif item.error is not None:  # 정답에 없는 칸 (더 쓴 글자·빈 칸)
-            wrong[current] = True
+                wrong[here] = True
+        elif item.error in SPACING_ERRORS:  # 띄어쓰기 오류 (누락·추가·두 칸): 양옆 어절 모두 틀림
+            mark_wrong(prev_word[k])
+            mark_wrong(next_word[k])
+        elif item.error is not None:  # 더 쓴 글자: 바로 앞 어절, 문장 맨 앞이면 뒤 어절
+            mark_wrong(prev_word[k] if prev_word[k] is not None else next_word[k])
     return [WordResult(text=t, cell_indexes=c, correct=not x) for t, c, x in zip(texts, cells, wrong, strict=True)]
+
+
+def _nearest(words: list[int | None]) -> list[int | None]:
+    """각 위치에서 그 앞(자기 자신 제외)에 마지막으로 나온 어절 번호. 없으면 None."""
+    out: list[int | None] = []
+    last: int | None = None
+    for word in words:
+        out.append(last)
+        if word is not None:
+            last = word
+    return out

@@ -34,10 +34,12 @@ def test_advanced_missing_space_is_judged(no_reference):
 
 
 def test_without_reference_data_strokes_are_skipped(no_reference):
+    """획 판정을 못 했으면 perfect가 아니고, 말풍선도 '확인하지 못했다'고 알린다."""
     body = client.post("/grade", json=load_request("beginner")).json()
-    assert body["correct"] is True and body["perfect"] is True
+    assert body["correct"] is True and body["perfect"] is False
     assert all(c["strokePass"] is None and c["strokeMap"] is None for c in body["cells"])
     assert all(c["durationMs"] is not None for c in body["cells"])  # 쓴 칸은 시간이 나옴
+    assert body["sejong"]["text"] == "글자와 띄어쓰기는 다 맞았어요"
 
 
 def test_stroke_errors_flow_into_the_response(monkeypatch):

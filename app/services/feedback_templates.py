@@ -18,7 +18,7 @@ TODO: 틀린 곳마다 "바타라고 쓰셨는데 바다라고 써야 해요." �
 
 from __future__ import annotations
 
-from app.schemas import Explanation, GradeRequest, SejongMessage
+from app.schemas import Explanation, GradeRequest, Mark, SejongMessage
 from app.services.aggregate import AggregateResult
 
 
@@ -39,6 +39,11 @@ _SEJONG = {
         ("글자는 다 맞았어요", "주황 상자에서 쓰는 순서를 다시 볼까요?"),
         ("All the letters are right", "Check the stroke order in the orange boxes."),
     ),
+    "unchecked": (
+        "praise",
+        ("글자와 띄어쓰기는 다 맞았어요", "쓰는 순서는 이번에 확인하지 못했어요."),
+        ("Letters and spacing are correct", "Stroke order could not be checked this time."),
+    ),
     "wrong": (
         "regret",
         ("아쉬워요, 다른 곳이 있어요", "빨간 상자를 다시 볼까요?"),
@@ -50,9 +55,20 @@ _SEJONG = {
 def sejong_message(req: GradeRequest, result: AggregateResult) -> SejongMessage:
     """결과에 맞는 킹세종 말풍선 (칭찬·아쉬움·격려). LLM이 실패해도 항상 이 문장을 쓸 수 있다.
 
-    표정(expression)은 결과로 정한다: 다 맞음 → praise / 글자·띄어쓰기는 맞고 획순만 틀림 → encourage / 그 밖 → regret
+    표정(expression)은 결과로 정한다:
+    - 다 맞음 → praise
+    - 글자·띄어쓰기는 맞고 획순이 틀린 칸이 있음 → encourage
+    - 글자·띄어쓰기는 맞고 획순 오류는 없지만, 획 판정을 못 한 칸이 있음 → praise (확인 못 했다고 알림)
+    - 글자나 띄어쓰기가 틀림 → regret
     """
-    key = "perfect" if result.perfect else ("stroke" if result.correct else "wrong")
+    if result.perfect:
+        key = "perfect"
+    elif not result.correct:
+        key = "wrong"
+    elif any(c.mark == Mark.STROKE for c in result.cells):
+        key = "stroke"
+    else:
+        key = "unchecked"
     expression, ko, en = _SEJONG[key]
     text, sub_text = en if req.locale == "en" else ko
     return SejongMessage(text=text, sub_text=sub_text, expression=expression, source="template")

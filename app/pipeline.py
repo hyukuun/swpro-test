@@ -17,19 +17,17 @@ TODO(혁윤): 임시 인식을 recognizer.recognize로 바꾸고, explanations�
 from __future__ import annotations
 
 import logging
-import re
 
 from app.config import ENGINE_VERSION
 from app.schemas import GradeRequest, GradeResponse, Stage
 from app.services import feedback_templates, spacing_align, stroke_checker
-from app.services.aggregate import aggregate
+from app.services.aggregate import aggregate, needs_stroke_check
 from app.services.recognizer import Candidate, CellKind, Recognition
 from app.services.spacing_align import AlignmentResult
 from app.services.stroke_checker import StrokeCheckResult
 
 log = logging.getLogger(__name__)
 
-HANGUL = re.compile(r"[가-힣ㄱ-ㅣ]")  # 획 판정을 하는 글자: 한글 음절·자모 (문장부호는 하지 않음)
 _warned_no_reference = False
 
 
@@ -76,15 +74,17 @@ def _temporary_recognitions(req: GradeRequest) -> list[Recognition]:
 
 
 def _check_strokes(req: GradeRequest, alignment: AlignmentResult) -> dict[int, StrokeCheckResult]:
-    """글자를 맞게 쓴 한글 칸만 획순·균형 판정. 정답 획 데이터가 없거나 사전에 없는 글자면 건너뛴다."""
+    """글자를 맞게 쓴 한글 칸만 획순·균형 판정 (aggregate.needs_stroke_check).
+
+    정답 획 데이터가 없거나 사전에 없는 글자면 건너뛴다. 건너뛴 칸이 있으면 aggregate가 perfect를 false로 둔다.
+    """
     global _warned_no_reference
     results: dict[int, StrokeCheckResult] = {}
     for cell in req.cells:
-        expected = alignment.expected.get(cell.index)
-        if not cell.strokes or not expected or not HANGUL.fullmatch(expected):
+        if not needs_stroke_check(cell, alignment):
             continue
-        if not alignment.char_correct.get(cell.index, False):
-            continue
+        expected = alignment.expected[cell.index]
+        assert expected is not None  # needs_stroke_check가 확인함
         try:
             results[cell.index] = stroke_checker.check_strokes(expected, req.canvas, cell.strokes)
         except FileNotFoundError:
