@@ -256,7 +256,7 @@ function showOrder(o) {
     else if (e.type === "EXTRA") marks[e.strokeIndex] = { color: "#999", dash: [6, 5] };
   }
   const items = o.errors.map(e => {
-    const who = e.jamo ? `${e.role} ${e.jamo}` : "";
+    const who = e.jamo ? `${ROLE_KO[e.role]} ${e.jamo}` : "";
     if (e.type === "MISSING") return `<li><b>빠짐</b> — ${who} ${e.strokeNo}번째 획</li>`;
     if (e.type === "EXTRA") return `<li><b>엉뚱한 획</b> — 쓴 ${e.strokeIndex + 1}번째 획</li>`;
     if (e.type === "ORDER") return `<li><b>순서</b> — 쓴 ${e.strokeIndex + 1}번째 획(${who}): ` +
@@ -286,7 +286,7 @@ function showBalance(b, strokeMap) {
   for (const e of b.errors) if (e.exceed) exceed[e.role + e.jamo] = e.exceed;
   const groups = {};
   for (const s of ref) {
-    const k = ROLE_KO[s.role] + s.jamo;
+    const k = s.role + s.jamo;
     (groups[k] ||= { us: [], rs: [] }).rs.push(s.points);
   }
   for (const m of strokeMap)
@@ -315,7 +315,7 @@ function show(out) {
   if (out.order) html += showOrder(out.order);
   if (out.balance) html += showBalance(out.balance, out.strokeMap);
   const map = out.strokeMap.map(m =>
-    `<li>${m.userIndex + 1}번째 획 → ${m.jamo ? `${m.role} ${m.jamo} ${m.strokeNo}획` : "짝 없음"}</li>`).join("");
+    `<li>${m.userIndex + 1}번째 획 → ${m.jamo ? `${ROLE_KO[m.role]} ${m.jamo} ${m.strokeNo}획` : "짝 없음"}</li>`).join("");
   html += `<details><summary>획 짝짓기</summary><ul>${map}</ul></details>
     <div class="muted">걸린 시간 ${out.durationMs ?? "-"} ms</div>
     <details><summary>출력 JSON</summary><pre>${JSON.stringify(out, null, 2)}</pre></details>`;

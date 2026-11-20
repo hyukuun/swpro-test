@@ -1,24 +1,14 @@
-"""[정진] 글자 균형 판정 (BALANCE). 넉넉한 기준, 상자(bbox)만 봄.
+"""[정진] 글자 균형 판정 (BALANCE): 글자 전체·자모별 크기와 위치를 상자(bbox)로 본다.
 
-단계      항목   재는 법                                 기준 (시작값)
-글자 전체  크기   전체 상자 높이 ÷ 칸 높이                 0.5 미만 / 1.0 초과
-          위치   전체 상자 중심 ↔ 칸 중심 거리            칸 크기의 0.2 이상
-자모별    위치   자모 상자가 (정답 상자 + 여유) 밖으로 나감 여유 = 칸 크기의 0.15
-          크기   자모 상자 대각선 ÷ 정답 상자 대각선       0.6 미만 / 1.5 초과
-
-글자 전체에서 걸리면 자모별은 건너뜀 (전체가 치우치면 자모가 전부 벗어나서 피드백이 쏟아짐).
-좌표는 전부 0~1 (칸 = 캔버스 전체).
-
-획순 판정(stroke_checker.judge) 결과의 strokeMap으로 학습자 획을 자모별로 묶음 → 획순 코드는 건드리지 않음.
-stroke_checker.check_strokes()가 부른다.
-오류마다 "message" = 학습자에게 보여줄 피드백 ("글자를 조금 더 크게 써보세요", "ㅏ를 조금 더 위에 쓰세요" 등).
+stroke_checker.check_strokes()가 부른다. 기준 숫자는 아래 상수에서 바꾼다.
+기준 표와 판정 순서: docs/stroke_check.md
 """
 
 from typing import Any
 
 import numpy as np
 
-from app.services.stroke_checker import ROLE_KO, normalize  # 픽셀 → 0~1 (획순 판정과 같은 변환)
+from app.services.stroke_checker import normalize  # 픽셀 → 0~1 (획순 판정과 같은 변환)
 
 GLYPH_SIZE = (0.5, 1.0)
 GLYPH_OFFSET = 0.2
@@ -131,7 +121,7 @@ def check(req, ref, stroke_map):
     # ---- 자모별 ----
     groups: dict[tuple[str, str], tuple[list[Any], list[Any]]] = {}  # (role, jamo) → (학습자 획들, 정답 획들)
     for s in ref:
-        key = (ROLE_KO.get(s["role"], s["role"]), s["jamo"])
+        key = (s["role"], s["jamo"])
         groups.setdefault(key, ([], []))[1].append(np.asarray(s["points"]))
     for m in stroke_map:
         if m["jamo"] is not None:  # EXTRA 획은 제외

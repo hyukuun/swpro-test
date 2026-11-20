@@ -47,7 +47,7 @@ def evaluate(req):
         out["order"] = o
         ok &= o["pass"]
     if mode in ("balance", "both"):
-        b = balance.check(req, ref, o["strokeMap"])
+        b = balance.check(req, o["reference"], o["strokeMap"])
         out["balance"] = {"pass": not b, "errors": b, "margin": balance.JAMO_MARGIN}
         ok &= not b
     out["pass"] = ok

@@ -1,44 +1,14 @@
 """[정진] D-04 획 수·획순·방향 판정 (글자가 맞은 칸만).
 
-입출력 (정진님 교정 엔진 명세 1·2번과 같은 내용)
-- 입력: 정답 글자(target), 칸 크기(canvas), 학습자 획(strokes, 쓴 순서대로, 칸 기준 픽셀 좌표)
-- 출력: StrokeCheckResult
-    passed      : 명세의 pass. errors가 비었으면 True
-    errors      : ORDER / DIRECTION / MISSING / EXTRA / BALANCE (schemas.CellError 형식)
-    stroke_map  : 학습자 획 ↔ 정답 획 짝, 학습자 획마다 하나 (schemas.StrokeMapItem 형식)
-    duration_ms : 첫 점 ~ 마지막 점 시간(ms)
-- role은 cho / jung / jong 으로 쓴다 (명세의 '초성/중성/종성' 대신, schemas.Role).
-
-부르는 조건 (pipeline이 지킨다)
-- recognizer가 정답 글자를 맞게 썼다고 인정한 칸만
-- target이 한글 음절 또는 자모 단독일 때만 (문장부호·빈 칸은 부르지 않음)
-
-구성
-- check_strokes() : pipeline이 부르는 진입점. judge() + stroke_balance.check()를 schemas 형식으로 바꿔 돌려준다
-- judge()         : 획순 판정 (SCF + 헝가리안). 글자 완성 후 1회 판정. dict 입출력
-                    (scripts/hand_writing_confirm.py 필기 테스트도 이걸 직접 부른다)
-- 균형(BALANCE)   : services/stroke_balance.py
-
-획순 판정 참고: Nguyen et al. (2019), Pattern Recognition Letters 121, 140-149.
-
-judge() 입력:
-    {"target": "가", "canvas": {"w": 300, "h": 300},
-     "strokes": [{"points": [[x, y, t_ms, pressure], ...]}, ...]}
-정답: core/reference.py의 정답 획 사전 (compose.py --all로 만든 composed_all.json)
-    → [{"order", "jamo", "role", "points": [[x, y], ...]}]  (0~1)
-
-judge() 출력: 획순 관련 필드만. role은 '초성/중성/종성' (필기 테스트 화면 형식)
-    errors 종류: MISSING, EXTRA, ORDER, DIRECTION
-
-번호 규칙 (10/31 초안 그대로):
-    strokeIndex, userIndex : 학습자 획 순번, 0부터
-    strokeNo               : 해당 자모 안에서 몇 번째 획, 1부터
-    expected, actual       : 글자 전체 기준 몇 번째로 써야 했나 / 실제로 썼나, 1부터
+- 진입점 check_strokes(target, canvas, strokes) → StrokeCheckResult (passed, errors, stroke_map, duration_ms)
+- 획순은 judge(), 균형(BALANCE)은 services/stroke_balance.py, 정답은 core/reference.py 정답 획 사전
+- 판정 과정, 쓰기 방식 변형, 번호 규칙: docs/stroke_check.md
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from itertools import combinations, product
 from typing import Any
 
 import numpy as np
@@ -46,6 +16,7 @@ from scipy.optimize import linear_sum_assignment
 
 from app.config import ENGINE_VERSION
 from app.core.reference import get_reference
+from app.core.stroke_vectorizer.jamo_templates import PIECES, STROKE_COUNT
 from app.schemas import Canvas, CellError, Stroke, StrokeMapItem
 
 
@@ -69,9 +40,6 @@ GRID = 8  # SCF 바둑판 8×8
 HALF = 1.0  # 바둑판 반폭 (기준점 ±1.0 → 캔버스 전체 포함)
 ALPHA = 0.5  # 비용 = ALPHA·SCF + (1-ALPHA)·위치
 REJECT = 0.45  # 비용이 이보다 크면 짝 없음 → EXTRA / MISSING
-
-ROLE_KO = {"cho": "초성", "jung": "중성", "jong": "종성"}
-ROLE_EN = {v: k for k, v in ROLE_KO.items()}
 
 
 # ---------------- 전처리 ----------------
@@ -132,7 +100,8 @@ def pair_cost(u, r, cloud_u, cloud_r):
 
 
 def match(user, ref):
-    """전체 그림 기준 비용 행렬 → 헝가리안. m[i] = 정답 획 번호(0부터) 또는 None."""
+    """전체 그림 기준 비용 행렬 → 헝가리안. m[i] = 정답 획 번호(0부터) 또는 None.
+    → (m, 역방향 여부, 짝지은 획들의 비용 합)"""
     cloud_u, cloud_r = np.concatenate(user), np.concatenate(ref)
     C = np.empty((len(user), len(ref)))
     rev = np.zeros_like(C, dtype=bool)
@@ -141,10 +110,12 @@ def match(user, ref):
             C[i, j], rev[i, j] = pair_cost(u, r, cloud_u, cloud_r)
     m: list[int | None] = [None] * len(user)
     reversed_ = [False] * len(user)
+    cost = 0.0
     for i, j in zip(*linear_sum_assignment(C), strict=False):
         if C[i, j] <= REJECT:
             m[i], reversed_[i] = int(j), bool(rev[i, j])
-    return m, reversed_
+            cost += float(C[i, j])
+    return m, reversed_, cost
 
 
 # ---------------- 획순 ----------------
@@ -172,24 +143,117 @@ def order_ok(m):
     return {idx[k]: (k in keep) for k in range(len(idx))}
 
 
+# ---------------- 쓰기 방식 변형 ----------------
+# 자모마다 허용하는 다른 쓰는 방법 (획 번호는 자모 안에서 0부터). 뜻과 고르는 기준: docs/stroke_check.md
+#   horizontal_tick: n = n번 꼭지를 가로로   merge_strokes: (a, b) = a·b번 획을 한 번에
+WRITING_VARIANTS: dict[str, dict[str, Any]] = {
+    "ㅈ": {"merge_strokes": (0, 1)},  # 0:ㅡ  1:왼다리  2:오른다리
+    "ㅊ": {"horizontal_tick": 0, "merge_strokes": (1, 2)},  # 0:꼭지  1:ㅡ  2:왼다리  3:오른다리
+    "ㅎ": {"horizontal_tick": 0},  # 0:꼭지  1:ㅡ  2:ㅇ
+}
+
+
+def horizontal_line(points):
+    """획의 중심·길이(시작~끝 거리)를 그대로 둔 왼→오 가로선"""
+    p = np.asarray(points, dtype=float)
+    (x0, y0), (x1, y1) = p.min(0), p.max(0)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    half = float(np.linalg.norm(p[-1] - p[0])) / 2
+    return [[cx - half, cy], [cx + half, cy]]
+
+
+def apply_writing(strokes, ops):
+    """부품 하나의 획들(점 목록들)에 쓰기 방식 변형을 적용"""
+    strokes = list(strokes)
+    if "horizontal_tick" in ops:
+        n = ops["horizontal_tick"]
+        strokes[n] = horizontal_line(strokes[n])
+    if "merge_strokes" in ops:
+        a, b = ops["merge_strokes"]
+        strokes[a] = list(strokes[a]) + [strokes[b][-1]]  # a번 획 끝 → b번 획 끝 직선 ("7"자)
+        del strokes[b]
+    return strokes
+
+
+def _piece_options(base):
+    """부품 하나에서 고를 수 있는 변형 조합: 표준({}) + 방법들을 켠 조합 전부"""
+    ops = WRITING_VARIANTS.get(base, {})
+    return [{k: ops[k] for k in keys} for r in range(len(ops) + 1) for keys in combinations(ops, r)]
+
+
+def writing_variants(ref):
+    """정답 획 → 정답 후보 목록 (첫 번째 = 표준 모양). 획은 {"order", "jamo", "role", "points"}"""
+    ref = sorted(ref, key=lambda s: s["order"])
+    groups: list[tuple[str, str, list[Any]]] = []  # (role, jamo, 획 점들) 쓰는 순서대로
+    for s in ref:
+        if groups and groups[-1][:2] == (s["role"], s["jamo"]):
+            groups[-1][2].append(s["points"])
+        else:
+            groups.append((s["role"], s["jamo"], [s["points"]]))
+
+    slots = []  # (role, jamo, 부품 기본 자모, 부품 획 점들, 선택지)
+    for role, jamo, pts in groups:
+        bases = PIECES.get(jamo, [jamo])
+        sizes = [STROKE_COUNT.get(b, 0) for b in bases]
+        if sum(sizes) != len(pts):  # 템플릿과 획 수가 다르면 변형 없이 그대로
+            bases, sizes = [jamo], [len(pts)]
+        start = 0
+        for base, size in zip(bases, sizes, strict=True):
+            piece = pts[start : start + size]
+            start += size
+            options = _piece_options(base) if size == STROKE_COUNT.get(base) else [{}]
+            slots.append((role, jamo, piece, options))
+
+    out = []
+    for choice in product(*(opts for *_, opts in slots)):
+        strokes = []
+        for (role, jamo, piece, _), ops in zip(slots, choice, strict=True):
+            for points in apply_writing(piece, ops):
+                strokes.append({"jamo": jamo, "role": role, "points": np.round(points, 4).tolist()})
+        out.append([{"order": k + 1, **st} for k, st in enumerate(strokes)])
+    return out
+
+
 # ---------------- 진입점 ----------------
 def judge(req, ref=None):
-    """req: 입력 JSON(dict). ref: 정답 획 [{"order", "jamo", "role", "points"}] (없으면 정답 획 사전에서)"""
+    """req: 입력 JSON(dict). ref: 정답 획 [{"order", "jamo", "role", "points"}] (없으면 정답 획 사전에서)
+    쓰기 방식 변형(WRITING_VARIANTS)마다 판정해서 오류가 가장 적은 것(같으면 더 비슷한 것)을 고른다.
+    고른 정답 획은 결과의 "reference"에 담는다 (균형 판정이 같은 정답을 쓰도록)."""
     if ref is None:
         ref = _reference(req["target"])
-    ref = sorted(ref, key=lambda s: s["order"])
+    U = [resample(normalize(s, req["canvas"])) for s in req["strokes"]]
+    best = None
+    for cand in writing_variants(ref):
+        errors, stroke_map, cost = _judge_one(U, cand)
+        if best is None or (len(errors), cost) < (len(best[0]), best[2]):
+            best = (errors, stroke_map, cost, cand)
+    assert best is not None
+    errors, stroke_map, _, chosen = best
 
+    ts = [p[2] for s in req["strokes"] for p in s["points"] if len(p) > 2]
+    return {
+        "target": req["target"],
+        "engineVersion": ENGINE_VERSION,
+        "pass": not errors,
+        "errors": errors,
+        "strokeMap": stroke_map,
+        "durationMs": round(max(ts) - min(ts), 1) if ts else None,
+        "reference": chosen,
+    }
+
+
+def _judge_one(U, ref):
+    """정답 후보 하나로 판정 → (오류, 획 짝, 짝 비용 합). U: 리샘플한 학습자 획"""
     # 정답 획마다 자모 안에서 몇 번째 획인지 (strokeNo)
     seen: dict[tuple[str, str], int] = {}
     info: list[dict[str, Any]] = []
     for s in ref:
         key = (s["role"], s["jamo"])
         seen[key] = seen.get(key, 0) + 1
-        info.append({"jamo": s["jamo"], "role": ROLE_KO.get(s["role"], s["role"]), "strokeNo": seen[key]})
+        info.append({"jamo": s["jamo"], "role": s["role"], "strokeNo": seen[key]})
 
     R = [resample(s["points"]) for s in ref]
-    U = [resample(normalize(s, req["canvas"])) for s in req["strokes"]]
-    m, reversed_ = match(U, R)
+    m, reversed_, cost = match(U, R)
     ok = order_ok(m)
 
     # 쓴 순서(actual): 짝이 있는 획만 세서 1부터
@@ -225,15 +289,7 @@ def judge(req, ref=None):
         if j not in matched:
             errors.append({"type": "MISSING", **a})
 
-    ts = [p[2] for s in req["strokes"] for p in s["points"] if len(p) > 2]
-    return {
-        "target": req["target"],
-        "engineVersion": ENGINE_VERSION,
-        "pass": not errors,
-        "errors": errors,
-        "strokeMap": stroke_map,
-        "durationMs": round(max(ts) - min(ts), 1) if ts else None,
-    }
+    return errors, stroke_map, cost
 
 
 # =====================================================================
@@ -250,12 +306,12 @@ def check_strokes(target: str, canvas: Canvas, strokes: list[Stroke]) -> StrokeC
         "strokes": [{"points": [list(p) for p in s.points]} for s in strokes],
     }
     order = judge(req, ref=ref)
-    balance = stroke_balance.check(req, ref, order["strokeMap"])
-    errors = [CellError.model_validate(_role_en(e)) for e in order["errors"] + balance]
+    balance = stroke_balance.check(req, order["reference"], order["strokeMap"])
+    errors = [CellError.model_validate(e) for e in order["errors"] + balance]
     return StrokeCheckResult(
         passed=not errors,
         errors=errors,
-        stroke_map=[StrokeMapItem.model_validate(_role_en(m)) for m in order["strokeMap"]],
+        stroke_map=[StrokeMapItem.model_validate(m) for m in order["strokeMap"]],
         duration_ms=order["durationMs"],
     )
 
@@ -263,9 +319,3 @@ def check_strokes(target: str, canvas: Canvas, strokes: list[Stroke]) -> StrokeC
 def _reference(target: str) -> list[dict[str, Any]]:
     """정답 획 사전(core/reference.py)에서 꺼낸 정답 획 → judge()·stroke_balance가 쓰는 dict 형식"""
     return [s.model_dump(mode="json") for s in get_reference(target)]
-
-
-def _role_en(item: dict[str, Any]) -> dict[str, Any]:
-    """judge()·stroke_balance의 role '초성' → schemas.Role 'cho'"""
-    role = item.get("role")
-    return {**item, "role": ROLE_EN.get(role, role)} if role is not None else item
