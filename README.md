@@ -228,6 +228,14 @@ python -m scripts.hand_writing_confirm                  # 필기 테스트 → h
   - `beginner` 바다 (다 획순 틀림) / `intermediate` 보고 싶었어 (싶→십) / `advanced` 나 너 좋아하냐? (나너 붙여 씀)
   - 응답 예시는 진짜 판정이 나올 모양이다. 지금 `/grade`는 글자 인식이 임시라 "다른 글자를 썼어요"는 아직 나오지 않는다. 정답 획 데이터가 없으면 획순 판정은 건너뛴다 (`strokePass: null`)
 - 잘못된 요청은 422 (규칙은 위 '요청 검사 규칙' 표)
+- 판정 시간 재기 (백엔드 제한 시간 정할 때). 정답 획 사전이 있어야 함:
+
+  ```bash
+  python -m scripts.measure_grade_time                              # 엔진만 (네트워크 제외)
+  python -m scripts.measure_grade_time --url http://127.0.0.1:8000  # 띄워 둔 서버에 요청
+  ```
+
+  Windows에서 `localhost`로 부르면 요청마다 약 2초가 더 걸릴 수 있다 (IPv6 `::1`을 먼저 시도함). `127.0.0.1`이나 IP 주소로 부른다.
 
 다른 컴퓨터(백엔드)에서 호출하려면 `--host 0.0.0.0`으로 띄운다:
 
