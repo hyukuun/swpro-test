@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from app.core.hangul import last_jong
 from app.schemas import ErrorType, Explanation, GradeRequest, Mark, SejongMessage
-from app.services.aggregate import CHAR_ERRORS, SPACING_ERRORS, STROKE_MARK_ERRORS, AggregateResult
+from app.services.aggregate import CHAR_ERRORS, SPACING_ERRORS, STROKE_MARK_ERRORS, AggregateResult, nearest_word
 
 E = ErrorType
 STROKE_PRIORITY = [E.ORDER, E.DIRECTION, E.MISSING, E.EXTRA]  # 한 칸에 획 오류가 여럿이면 앞의 것으로 설명
@@ -47,7 +47,7 @@ def explanations(req: GradeRequest, result: AggregateResult) -> list[Explanation
             word_of[pos + k] = w
         pos += len(text) + 1
     here = [word_of.get(it.target_index) if it.target_index is not None else None for it in items]
-    prev, nxt = _nearest(here), _nearest(here[::-1])[::-1]
+    prev, nxt = nearest_word(here), nearest_word(here[::-1])[::-1]
 
     def owner(k: int) -> int | None:
         """항목 k가 속한 어절 (더 쓴 칸은 앞 어절, 문장 맨 앞이면 뒤 어절)."""
@@ -169,17 +169,6 @@ def _eul(word: str) -> str:
 
 def _euro(word: str) -> str:
     return "로" if last_jong(word) in ("", "ㄹ") else "으로"
-
-
-def _nearest(words: list[int | None]) -> list[int | None]:
-    """각 위치에서 그 앞(자기 자신 제외)에 마지막으로 나온 어절 번호. 없으면 None."""
-    out: list[int | None] = []
-    last: int | None = None
-    for word in words:
-        out.append(last)
-        if word is not None:
-            last = word
-    return out
 
 
 _SEJONG = {

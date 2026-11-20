@@ -157,8 +157,8 @@ def _words(target: str, items: list[AlignmentItem]) -> list[WordResult]:
     word_at: list[int | None] = [
         word_of.get(item.target_index) if item.target_index is not None else None for item in items
     ]
-    prev_word = _nearest(word_at)  # 각 항목 바로 앞 글자 자리의 어절
-    next_word = _nearest(word_at[::-1])[::-1]  # 각 항목 바로 뒤 글자 자리의 어절
+    prev_word = nearest_word(word_at)  # 각 항목 바로 앞 글자 자리의 어절
+    next_word = nearest_word(word_at[::-1])[::-1]  # 각 항목 바로 뒤 글자 자리의 어절
 
     cells: list[list[int]] = [[] for _ in texts]
     wrong = [False] * len(texts)
@@ -182,8 +182,12 @@ def _words(target: str, items: list[AlignmentItem]) -> list[WordResult]:
     return [WordResult(text=t, cell_indexes=c, correct=not x) for t, c, x in zip(texts, cells, wrong, strict=True)]
 
 
-def _nearest(words: list[int | None]) -> list[int | None]:
-    """각 위치에서 그 앞(자기 자신 제외)에 마지막으로 나온 어절 번호. 없으면 None."""
+def nearest_word(words: list[int | None]) -> list[int | None]:
+    """각 위치에서 그 앞(자기 자신 제외)에 마지막으로 나온 어절 번호. 없으면 None.
+
+    더 쓴 칸·띄어쓰기 자리가 어느 어절에 붙는지 정할 때 쓴다. 빨간 어절(여기)과 설명 문장(feedback_templates)이
+    같은 어절을 가리키도록 둘 다 이 함수를 쓴다. 뒤 어절은 뒤집어서 부른다: nearest_word(w[::-1])[::-1]
+    """
     out: list[int | None] = []
     last: int | None = None
     for word in words:
