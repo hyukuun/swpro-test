@@ -10,7 +10,7 @@
 임시 인식: 진짜 글자 인식(recognize) 전까지 "정답 글자를 썼다"고 가정한다.
 그래서 다른 글자를 쓴 경우는 아직 잡지 못하지만, 띄어쓰기 판정과 획순 판정은 진짜로 나온다.
 
-정답 획 데이터(composed_all.json)가 없으면 획 판정을 건너뛴다 (strokePass: null). 로그에 한 번 경고한다.
+정답 획 데이터(composed_all.json)가 없거나 획 판정 중 오류가 나면 그 칸의 획 판정만 건너뛴다 (strokePass: null).
 TODO(혁윤): 임시 인식을 recognizer.recognize로 바꾸고, explanations를 채운다
 """
 
@@ -76,7 +76,10 @@ def _temporary_recognitions(req: GradeRequest) -> list[Recognition]:
 def _check_strokes(req: GradeRequest, alignment: AlignmentResult) -> dict[int, StrokeCheckResult]:
     """글자를 맞게 쓴 한글 칸만 획순·균형 판정 (aggregate.needs_stroke_check).
 
-    정답 획 데이터가 없거나 사전에 없는 글자면 건너뛴다. 건너뛴 칸이 있으면 aggregate가 perfect를 false로 둔다.
+    건너뛰는 경우 (건너뛴 칸이 있으면 aggregate가 perfect를 false로 둔다):
+    - 정답 획 데이터 파일이 없음 → 모든 칸 (로그 경고 한 번)
+    - 사전에 없는 글자 → 그 칸
+    - 판정 중 예상 못 한 오류 → 그 칸 (로그에 오류 전체). 칸 하나 때문에 /grade 전체가 실패하지 않게
     """
     global _warned_no_reference
     results: dict[int, StrokeCheckResult] = {}
@@ -96,4 +99,8 @@ def _check_strokes(req: GradeRequest, alignment: AlignmentResult) -> dict[int, S
             return {}
         except KeyError:
             log.warning("정답 획 데이터에 없는 글자라 획순 판정을 건너뜀: %s", expected)
+        except Exception:
+            # 예상 못 한 오류(특이한 손글씨 입력, 판정 코드 버그 등): 이 칸만 '획 판정 못 함'으로 두고
+            # 나머지 판정 결과는 그대로 돌려준다. 원인을 찾을 수 있게 오류 전체를 서버 로그에 남긴다.
+            log.exception("획순 판정 중 오류, 이 칸은 건너뜀: 칸 %d, 글자 %s", cell.index, expected)
     return results

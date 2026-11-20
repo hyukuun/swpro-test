@@ -100,6 +100,23 @@ def test_balance_only_is_not_perfect_and_says_so(monkeypatch):
     assert body["sejong"]["subText"] == "글자 모양을 조금만 다듬어 볼까요?"
 
 
+def test_stroke_check_crash_skips_only_that_cell(monkeypatch):
+    """'다' 획 판정 중 예상 못 한 오류 → 500이 아니라 그 칸만 '획 판정 못 함', 나머지 결과는 그대로."""
+
+    def fake_check(target, canvas, strokes):
+        if target == "다":
+            raise ValueError("판정 코드 버그")
+        return StrokeCheckResult(passed=True)
+
+    monkeypatch.setattr(stroke_checker, "check_strokes", fake_check)
+    res = client.post("/grade", json=load_request("beginner"))
+    assert res.status_code == 200
+    body = res.json()
+    assert [c["strokePass"] for c in body["cells"]] == [True, None]
+    assert body["correct"] is True and body["perfect"] is False
+    assert body["sejong"]["text"] == "글자와 띄어쓰기는 다 맞았어요"
+
+
 def test_all_stroke_checks_pass_is_perfect(monkeypatch):
     monkeypatch.setattr(stroke_checker, "check_strokes", lambda *a: StrokeCheckResult(passed=True))
     body = client.post("/grade", json=load_request("beginner")).json()
