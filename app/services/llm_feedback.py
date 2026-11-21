@@ -36,9 +36,17 @@ SYSTEM = (
     "who just traced K-pop lyrics. Write a speech bubble with exactly two lines: "
     "text = a short, warm first line (at most 20 characters); "
     "sub_text = one sentence saying what to look at again (at most 40 characters). "
+    "There is always at least one mistake, so never say the writing is perfect or well done; "
+    "the first line gently encourages the learner (for example, that they are almost there). "
     "Do not invent mistakes: mention only the mistakes given. Do not use quotation marks or emoji. "
     "Write in the language requested."
 )
+
+# 결과 한 줄 요약 (LLM이 칭찬·격려 정도를 판정과 맞추도록)
+_RESULT = {
+    False: "Some letters or spacing are wrong.",
+    True: "All letters and spacing are right, but the stroke order needs another look.",
+}
 
 
 class _Bubble(BaseModel):
@@ -99,7 +107,10 @@ def sejong_line(req: GradeRequest, result: AggregateResult) -> SejongMessage | N
     if not mistakes:
         return None
     language = "English" if req.locale == "en" else "Korean"
-    prompt = f"Language: {language}\nTarget sentence: {req.target}\nMistakes:\n" + "\n".join(f"- {m}" for m in mistakes)
+    prompt = (
+        f"Language: {language}\nTarget sentence: {req.target}\nResult: {_RESULT[result.correct]}\nMistakes:\n"
+        + "\n".join(f"- {m}" for m in mistakes)
+    )
     try:
         bubble = _pool.submit(_ask, prompt).result(timeout=config.LLM_TIMEOUT_MS / 1000)
     except WaitTimeout:

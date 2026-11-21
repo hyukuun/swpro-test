@@ -250,6 +250,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | 이름 | 기본값 | 설명 |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | 없음 | 있으면 킹세종 말풍선을 Gemini로 만든다. 없으면 템플릿 말풍선. **깃에 올리지 않는다**. 결제를 연결하지 않은 프로젝트의 키여야 무료 등급으로 쓴다 (결제가 필요한 프로젝트면 402) |
-| `LLM_MODEL` | `gemini-flash-latest` | 쓸 Gemini 모델. 무료 등급이 없는 모델이면 402 |
+| `LLM_MODEL` | `gemini-3.5-flash-lite` | 쓸 Gemini 모델 (무료 등급 있음, 약 2초). 무료 등급이 없는 모델이면 402. `gemini-flash-latest`는 무료가 아닌 모델을 가리킬 수 있어 쓰지 않는다 |
 | `LLM_TIMEOUT_MS` | `3000` | 이 시간 안에 Gemini 답이 없으면 기다리지 않고 템플릿 말풍선. 키가 있으면 `/grade`가 최대 이만큼 늘 수 있다 |
 | `ENGINE_VERSION` | `0.1.0-stub` | 응답의 `engineVersion` |
