@@ -143,7 +143,7 @@ tests/
  ├─③ check_strokes  글자가 맞은 칸만 "순서대로 썼나?"     → 획순 오류, 획 짝
  ├─④ aggregate      ①②③을 화면용으로 묶기                → 칸 색(mark), 어절 결과, correct·perfect
  ├─⑤ explanations   틀린 곳 설명 문장 만들기              → '이렇게 고쳐요'
- └─⑥ sejong_message 킹세종 말풍선 (LLM이 되면 sejong_line) → 말풍선
+ └─⑥ sejong_line    킹세종 말풍선 (Gemini, 안 되면 sejong_message 템플릿) → 말풍선
  ▼
 응답
 ```
@@ -244,3 +244,12 @@ python -m scripts.hand_writing_confirm                  # 필기 테스트 → h
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+환경변수 (모두 없어도 돌아감, `app/config.py`):
+
+| 이름 | 기본값 | 설명 |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | 없음 | 있으면 킹세종 말풍선을 Gemini로 만든다. 없으면 템플릿 말풍선. **깃에 올리지 않는다**. 결제를 연결하지 않은 프로젝트의 키여야 무료 등급으로 쓴다 (결제가 필요한 프로젝트면 402) |
+| `LLM_MODEL` | `gemini-flash-latest` | 쓸 Gemini 모델. 무료 등급이 없는 모델이면 402 |
+| `LLM_TIMEOUT_MS` | `3000` | 이 시간 안에 Gemini 답이 없으면 기다리지 않고 템플릿 말풍선. 키가 있으면 `/grade`가 최대 이만큼 늘 수 있다 |
+| `ENGINE_VERSION` | `0.1.0-stub` | 응답의 `engineVersion` |

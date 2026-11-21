@@ -176,6 +176,42 @@ def _grade_with_llm(monkeypatch, answer, key="test-key"):
     return r.json()["sejong"], fake_ask.prompt
 
 
+def test_slow_llm_is_not_waited_for(monkeypatch):
+    """LLM_TIMEOUT_MS가 지나면 답을 기다리지 않고 바로 템플릿 (Gemini 서버 최소 제한 10초와 상관없이)."""
+    import time
+
+    from app import config
+    from app.services.llm_feedback import _Bubble
+
+    def slow_answer():
+        time.sleep(1)
+        return _Bubble(text="늦은 답", sub_text="늦은 답")
+
+    from app.services import llm_feedback
+
+    monkeypatch.setattr(config, "LLM_TIMEOUT_MS", 50)
+    monkeypatch.setattr(llm_feedback, "_ask", lambda prompt: slow_answer())
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "test-key")
+    assume_target_written(monkeypatch)
+    start = time.time()
+    sejong = client.post("/grade", json=load_request("advanced")).json()["sejong"]
+    assert sejong["source"] == "template"
+    assert time.time() - start < 0.9  # 1초짜리 답을 기다리지 않음
+
+
+def test_gemini_client_timeout_is_at_least_server_minimum(monkeypatch):
+    """Gemini 서버는 10초보다 짧은 제한을 400으로 거절한다. 클라이언트 제한은 늘 10초 이상."""
+    from app import config
+    from app.services import llm_feedback
+
+    monkeypatch.setattr(config, "LLM_TIMEOUT_MS", 3000)
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(llm_feedback, "_client", None)
+    c = llm_feedback._gemini()
+    monkeypatch.setattr(llm_feedback, "_client", None)
+    assert c._api_client._http_options.timeout >= llm_feedback.SERVER_MIN_TIMEOUT_MS
+
+
 def test_llm_bubble_is_used_when_it_answers(monkeypatch):
     from app.services.llm_feedback import _Bubble
 

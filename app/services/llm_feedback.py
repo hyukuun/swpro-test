@@ -16,6 +16,8 @@ Gemini Flash로 결과 화면 위 킹세종 말풍선을 학습자에게 맞는 
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as WaitTimeout
 from typing import Any
 
 from pydantic import BaseModel
@@ -46,11 +48,16 @@ class _Bubble(BaseModel):
     sub_text: str
 
 
+SERVER_MIN_TIMEOUT_MS = 10_000  # Gemini 서버는 10초보다 짧은 제한 시간을 받지 않는다 (400 INVALID_ARGUMENT)
+
+# 기다리기는 우리 쪽에서 한다: LLM_TIMEOUT_MS가 지나면 답을 기다리지 않고 템플릿을 쓴다.
+# 이미 보낸 요청은 뒤에서 끝까지(최대 SERVER_MIN_TIMEOUT_MS) 가고 결과는 버린다.
+_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm")
 _client: Any = None
 
 
 def _gemini() -> Any:
-    """Gemini 클라이언트 (처음 부를 때 한 번 만든다). 재시도 없이 시간 제한만 둔다."""
+    """Gemini 클라이언트 (처음 부를 때 한 번 만든다). 재시도 없음."""
     global _client
     if _client is None:
         from google import genai
@@ -59,7 +66,8 @@ def _gemini() -> Any:
         _client = genai.Client(
             api_key=config.GEMINI_API_KEY,
             http_options=types.HttpOptions(
-                timeout=config.LLM_TIMEOUT_MS, retry_options=types.HttpRetryOptions(attempts=1)
+                timeout=max(config.LLM_TIMEOUT_MS, SERVER_MIN_TIMEOUT_MS),
+                retry_options=types.HttpRetryOptions(attempts=1),
             ),
         )
     return _client
@@ -93,9 +101,12 @@ def sejong_line(req: GradeRequest, result: AggregateResult) -> SejongMessage | N
     language = "English" if req.locale == "en" else "Korean"
     prompt = f"Language: {language}\nTarget sentence: {req.target}\nMistakes:\n" + "\n".join(f"- {m}" for m in mistakes)
     try:
-        bubble = _ask(prompt)
-    except Exception as e:  # 시간 초과·키 오류·네트워크 등: 화면은 템플릿으로
-        log.warning("LLM 말풍선 실패, 템플릿을 씀: %s", type(e).__name__)
+        bubble = _pool.submit(_ask, prompt).result(timeout=config.LLM_TIMEOUT_MS / 1000)
+    except WaitTimeout:
+        log.warning("LLM 말풍선이 %dms 안에 오지 않아 템플릿을 씀", config.LLM_TIMEOUT_MS)
+        return None
+    except Exception as e:  # 키 오류·결제·네트워크 등: 화면은 템플릿으로. 이유(Google 오류 문장)도 남긴다
+        log.warning("LLM 말풍선 실패, 템플릿을 씀: %s: %s", type(e).__name__, e)
         return None
     if bubble is None:
         log.warning("LLM 말풍선 형식이 이상해 템플릿을 씀")
